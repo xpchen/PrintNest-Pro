@@ -11,7 +11,7 @@ import {
   LayoutResult,
   CanvasResult,
 } from '../types';
-import { MaxRectsBin, PackingItem } from './MaxRectsEngine';
+import { MaxRectsBin, PackingItem, Rect } from './MaxRectsEngine';
 
 let _uid = 0;
 function uid(): string {
@@ -71,17 +71,49 @@ export function sortUnits(units: LayoutUnit[]): LayoutUnit[] {
 /**
  * Step 3: 多画布排版
  * 一个画布放不下自动溢出到下一个
+ * lockedPlacements: 锁定元素保留在原位，仅重排未锁定元素
  */
-export function runLayout(items: PrintItem[], config: LayoutConfig): LayoutResult {
+export function runLayout(
+  items: PrintItem[],
+  config: LayoutConfig,
+  lockedPlacements?: Placement[],
+): LayoutResult {
   const startTime = performance.now();
 
-  // 展开 & 排序
+  // 收集锁定元素涉及的 printItemId+instanceIndex，避免重复展开
+  const lockedSet = new Set<string>();
+  if (lockedPlacements) {
+    lockedPlacements.forEach((p) => lockedSet.add(p.layoutUnitId));
+  }
+
+  // 展开 & 排序（排除已锁定的 unit）
   const allUnits = expandItems(items, config);
-  const sorted = sortUnits(allUnits);
+  const unlockedUnits = lockedPlacements
+    ? allUnits.filter((u) => !lockedSet.has(u.id))
+    : allUnits;
+  const sorted = sortUnits(unlockedUnits);
 
   const bins: MaxRectsBin[] = [];
-  const placementMap: Map<number, Placement[]> = new Map(); // canvasIndex -> placements
+  const placementMap: Map<number, Placement[]> = new Map();
   const unplaced: LayoutUnit[] = [];
+
+  // 如果有锁定元素，先按画布索引分组，创建对应的 bin 并预占位置
+  if (lockedPlacements && lockedPlacements.length > 0) {
+    // 找到需要的最大画布索引
+    const maxIdx = Math.max(...lockedPlacements.map((p) => p.canvasIndex));
+    for (let i = 0; i <= maxIdx; i++) {
+      bins.push(new MaxRectsBin(config.canvas.width, config.canvas.height));
+      placementMap.set(i, []);
+    }
+    // 预占锁定元素的位置
+    for (const lp of lockedPlacements) {
+      const bin = bins[lp.canvasIndex];
+      if (bin) {
+        bin.occupy({ x: lp.x, y: lp.y, width: lp.width, height: lp.height });
+        placementMap.get(lp.canvasIndex)!.push({ ...lp });
+      }
+    }
+  }
 
   for (const unit of sorted) {
     let placed = false;
@@ -149,7 +181,6 @@ export function runLayout(items: PrintItem[], config: LayoutConfig): LayoutResul
           },
         ]);
       } else {
-        // 单个元素比画布还大，无法放置
         unplaced.push(unit);
       }
     }

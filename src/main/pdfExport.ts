@@ -1,0 +1,200 @@
+/**
+ * 印刷级 PDF 导出
+ *
+ * 使用 PDFKit 生成高精度 PDF，支持：
+ * - 真实图片嵌入（原始分辨率）
+ * - 出血线标记（crop marks）
+ * - mm 单位精确定位
+ * - 多画布多页导出
+ */
+import { ipcMain } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// PDFKit 类型（动态 require 以兼容打包）
+let PDFDocument: any;
+try {
+  PDFDocument = require('pdfkit');
+} catch {
+  // PDFKit 未安装时的降级处理
+  PDFDocument = null;
+}
+
+/** mm -> PDF points (1mm = 2.83465pt) */
+const MM_TO_PT = 2.83465;
+
+interface ExportPlacement {
+  x: number;       // mm
+  y: number;       // mm
+  width: number;   // mm
+  height: number;  // mm
+  rotated: boolean;
+  imagePath?: string;  // 本地文件路径
+  imageBase64?: string; // base64 data URL
+  color: string;
+  name: string;
+}
+
+interface ExportCanvas {
+  placements: ExportPlacement[];
+}
+
+interface PdfExportOptions {
+  canvasWidth: number;   // mm
+  canvasHeight: number;  // mm
+  canvases: ExportCanvas[];
+  bleed: number;         // mm
+  showCropMarks: boolean;
+  outputPath: string;
+}
+
+/**
+ * 绘制出血裁切标记
+ */
+function drawCropMarks(doc: any, canvasW: number, canvasH: number, bleed: number) {
+  const markLen = 10 * MM_TO_PT;  // 10mm 长的标记线
+  const offset = bleed * MM_TO_PT;
+  const w = canvasW * MM_TO_PT;
+  const h = canvasH * MM_TO_PT;
+
+  doc.save();
+  doc.strokeColor('#000000').lineWidth(0.25);
+
+  // 四个角各画两条线
+  const corners = [
+    { x: offset, y: offset },                // 左上
+    { x: offset + w, y: offset },             // 右上
+    { x: offset, y: offset + h },             // 左下
+    { x: offset + w, y: offset + h },         // 右下
+  ];
+
+  for (const c of corners) {
+    // 水平标记
+    const hDir = c.x <= offset + w / 2 ? -1 : 1;
+    doc.moveTo(c.x + hDir * markLen * 0.2, c.y)
+       .lineTo(c.x + hDir * markLen, c.y)
+       .stroke();
+    // 垂直标记
+    const vDir = c.y <= offset + h / 2 ? -1 : 1;
+    doc.moveTo(c.x, c.y + vDir * markLen * 0.2)
+       .lineTo(c.x, c.y + vDir * markLen)
+       .stroke();
+  }
+
+  doc.restore();
+}
+
+/**
+ * 从 base64 data URL 中提取 Buffer
+ */
+function base64ToBuffer(dataUrl: string): Buffer {
+  const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+  return Buffer.from(base64Data, 'base64');
+}
+
+/**
+ * 导出 PDF
+ */
+async function exportPdf(options: PdfExportOptions): Promise<void> {
+  if (!PDFDocument) {
+    throw new Error('PDFKit 未安装。请运行: npm install pdfkit');
+  }
+
+  const { canvasWidth, canvasHeight, canvases, bleed, showCropMarks, outputPath } = options;
+  const bleedPt = bleed * MM_TO_PT;
+
+  // 页面尺寸 = 画布尺寸 + 四边出血
+  const pageW = (canvasWidth + bleed * 2) * MM_TO_PT;
+  const pageH = (canvasHeight + bleed * 2) * MM_TO_PT;
+
+  const doc = new PDFDocument({
+    size: [pageW, pageH],
+    margins: { top: 0, bottom: 0, left: 0, right: 0 },
+    autoFirstPage: false,
+    info: {
+      Title: 'PrintNest Pro Layout',
+      Author: 'PrintNest Pro',
+      Creator: 'PrintNest Pro v1.0',
+    },
+  });
+
+  const stream = fs.createWriteStream(outputPath);
+  doc.pipe(stream);
+
+  for (let ci = 0; ci < canvases.length; ci++) {
+    const canvas = canvases[ci];
+    doc.addPage();
+
+    // 白色背景
+    doc.rect(bleedPt, bleedPt, canvasWidth * MM_TO_PT, canvasHeight * MM_TO_PT)
+       .fill('#ffffff');
+
+    // 绘制每个元素
+    for (const p of canvas.placements) {
+      const px = (p.x + bleed) * MM_TO_PT;
+      const py = (p.y + bleed) * MM_TO_PT;
+      const pw = p.width * MM_TO_PT;
+      const ph = p.height * MM_TO_PT;
+
+      // 尝试嵌入图片
+      let imageDrawn = false;
+      try {
+        if (p.imagePath && fs.existsSync(p.imagePath)) {
+          doc.image(p.imagePath, px, py, { width: pw, height: ph });
+          imageDrawn = true;
+        } else if (p.imageBase64) {
+          const buf = base64ToBuffer(p.imageBase64);
+          doc.image(buf, px, py, { width: pw, height: ph });
+          imageDrawn = true;
+        }
+      } catch {
+        // 图片加载失败，用色块替代
+      }
+
+      if (!imageDrawn) {
+        // 色块 fallback
+        doc.rect(px, py, pw, ph).fill(p.color || '#cccccc');
+      }
+
+      // 轻描边
+      doc.rect(px, py, pw, ph).stroke('#cccccc');
+    }
+
+    // 出血裁切标记
+    if (showCropMarks) {
+      drawCropMarks(doc, canvasWidth, canvasHeight, bleed);
+    }
+
+    // 画布边界线（虚线）
+    doc.save();
+    doc.rect(bleedPt, bleedPt, canvasWidth * MM_TO_PT, canvasHeight * MM_TO_PT)
+       .dash(3, { space: 2 })
+       .strokeColor('#999999')
+       .lineWidth(0.5)
+       .stroke();
+    doc.restore();
+  }
+
+  doc.end();
+
+  return new Promise((resolve, reject) => {
+    stream.on('finish', resolve);
+    stream.on('error', reject);
+  });
+}
+
+/** 注册 PDF 导出 IPC */
+export function registerPdfExportIPC(): void {
+  ipcMain.handle('pdf:export', async (_event, options: PdfExportOptions) => {
+    try {
+      await exportPdf(options);
+      return { success: true, path: options.outputPath };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('pdf:isAvailable', async () => {
+    return PDFDocument !== null;
+  });
+}

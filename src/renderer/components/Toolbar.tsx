@@ -1,165 +1,386 @@
 /**
  * 顶部工具栏
- * 导入图片素材 | 自动排版 | 策略选择 | 画布设置 | 缩放 | 导出
+ * 导入图片（弹窗模式）| 自动排版 | 策略选择 | 画布设置 | 缩放 | 导出
  */
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { PackingStrategy } from '../../shared/types';
+import { showToast } from '../utils/toast';
 
 const DEFAULT_DPI = 150;
 function pxToMm(px: number, dpi: number = DEFAULT_DPI): number {
   return Math.round((px / dpi) * 25.4);
 }
 
+interface ModalPreview {
+  name: string;
+  src: string;
+  pw: number;
+  ph: number;
+  mmW: number;
+  mmH: number;
+}
+
 export const Toolbar: React.FC = () => {
   const {
-    config, isComputing, zoom,
+    config, isComputing, zoom, result, activeCanvasIndex, items,
     addItem, setConfig, setCanvasSize, runAutoLayout, setZoom,
   } = useAppStore();
 
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
+  const [modalPreviews, setModalPreviews] = useState<ModalPreview[]>([]);
+  const [modalDpi, setModalDpi] = useState(DEFAULT_DPI);
+  const [modalQty, setModalQty] = useState(5);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modalFileRef = useRef<HTMLInputElement>(null);
 
-  /** 处理图片文件导入 */
-  const handleFiles = useCallback((files: FileList | null) => {
-    if (!files) return;
-    Array.from(files)
-      .filter((f) => f.type.startsWith('image/'))
-      .forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const src = e.target?.result as string;
-          const img = new Image();
-          img.onload = () => {
-            const mmW = pxToMm(img.naturalWidth);
-            const mmH = pxToMm(img.naturalHeight);
-            addItem({
-              name: file.name.replace(/\.\w+$/, ''),
-              width: mmW,
-              height: mmH,
-              quantity: 5,
-              imageSrc: src,
-            });
-          };
-          img.src = src;
+  /** Open import modal */
+  const openModal = useCallback(() => {
+    setShowModal(true);
+    setModalPreviews([]);
+    setModalDpi(DEFAULT_DPI);
+    setModalQty(5);
+  }, []);
+
+  /** Process files selected in modal */
+  const processModalFiles = useCallback((files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+    const previews: ModalPreview[] = [];
+    let loaded = 0;
+    for (const file of imageFiles) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const src = e.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          previews.push({
+            name: file.name,
+            src,
+            pw: img.naturalWidth,
+            ph: img.naturalHeight,
+            mmW: pxToMm(img.naturalWidth, modalDpi),
+            mmH: pxToMm(img.naturalHeight, modalDpi),
+          });
+          if (++loaded === imageFiles.length) {
+            setModalPreviews([...previews]);
+          }
         };
-        reader.readAsDataURL(file);
+        img.src = src;
+      };
+      reader.readAsDataURL(file);
+    }
+  }, [modalDpi]);
+
+  /** Recalc previews when DPI changes */
+  const handleDpiChange = useCallback((dpi: number) => {
+    setModalDpi(dpi);
+    setModalPreviews((prev) =>
+      prev.map((p) => ({
+        ...p,
+        mmW: pxToMm(p.pw, dpi),
+        mmH: pxToMm(p.ph, dpi),
+      }))
+    );
+  }, []);
+
+  /** Add items from modal */
+  const addFromModal = useCallback(() => {
+    if (modalPreviews.length === 0) {
+      showToast('请先选择图片');
+      return;
+    }
+    for (const p of modalPreviews) {
+      addItem({
+        name: p.name.replace(/\.\w+$/, ''),
+        width: p.mmW,
+        height: p.mmH,
+        quantity: modalQty,
+        imageSrc: p.src,
       });
-  }, [addItem]);
+    }
+    setShowModal(false);
+    showToast(`已导入 ${modalPreviews.length} 个素材`);
+  }, [modalPreviews, modalQty, addItem]);
 
-  const handleImportClick = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
+  /** Auto layout */
+  const handleLayout = useCallback(() => {
+    if (items.length === 0) {
+      showToast('请先导入素材');
+      return;
+    }
+    runAutoLayout();
+    showToast('排版完成');
+  }, [items, runAutoLayout]);
 
-  /** 导出 PNG */
+  /** Clean PNG export (2x scale, no UI chrome) */
   const handleExportPng = useCallback(() => {
-    const canvas = document.querySelector('.layout-canvas') as HTMLCanvasElement;
-    if (!canvas) return alert('请先执行排版');
+    if (!result || !result.canvases[activeCanvasIndex]) {
+      showToast('请先执行排版');
+      return;
+    }
+    const cw = config.canvas.width;
+    const ch = config.canvas.height;
+    const scale = 2;
+    const expCvs = document.createElement('canvas');
+    expCvs.width = cw * scale;
+    expCvs.height = ch * scale;
+    const ctx = expCvs.getContext('2d')!;
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, cw, ch);
+
+    const cur = result.canvases[activeCanvasIndex];
+    for (const p of cur.placements) {
+      const item = items.find((i) => i.id === p.printItemId);
+      // Try to draw image from cache
+      const imgEl = item?.imageSrc ? document.querySelector<HTMLImageElement>(`img[src="${item.imageSrc}"]`) : null;
+      // Use a simpler approach: create and draw
+      if (item?.imageSrc) {
+        // Check if image is already loaded in a tmp way
+        const tmpImg = new Image();
+        tmpImg.src = item.imageSrc;
+        if (tmpImg.complete && tmpImg.naturalWidth > 0) {
+          ctx.drawImage(tmpImg, p.x, p.y, p.width, p.height);
+        } else {
+          ctx.fillStyle = (item?.color ?? '#888') + 'aa';
+          ctx.fillRect(p.x, p.y, p.width, p.height);
+        }
+      } else {
+        ctx.fillStyle = (item?.color ?? '#888') + 'aa';
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+      }
+      ctx.strokeStyle = '#ccc';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(p.x, p.y, p.width, p.height);
+    }
+
     const link = document.createElement('a');
-    link.download = 'layout.png';
-    link.href = canvas.toDataURL('image/png');
+    link.download = `PrintNest_画布${activeCanvasIndex + 1}.png`;
+    link.href = expCvs.toDataURL('image/png');
     link.click();
-  }, []);
+    showToast('PNG 已导出');
+  }, [result, activeCanvasIndex, config, items]);
+
+  /** PDF export via Electron IPC */
+  const handleExportPdf = useCallback(async () => {
+    if (!result || result.canvases.length === 0) {
+      showToast('请先执行排版');
+      return;
+    }
+    const api = (window as any).electronAPI;
+    if (!api?.exportPdf) {
+      showToast('PDF 导出仅在桌面端可用');
+      return;
+    }
+    const isPdfOk = await api.isPdfAvailable?.();
+    if (!isPdfOk) {
+      showToast('PDFKit 未安装，请运行 npm install pdfkit');
+      return;
+    }
+    const outputPath = await api.saveFile('PrintNest_排版.pdf', 'PDF', ['pdf']);
+    if (!outputPath) return;
+
+    const canvases = result.canvases.map((c) => ({
+      placements: c.placements.map((p) => {
+        const item = items.find((i) => i.id === p.printItemId);
+        return {
+          x: p.x, y: p.y, width: p.width, height: p.height, rotated: p.rotated,
+          imageBase64: item?.imageSrc || undefined,
+          color: item?.color || '#ccc',
+          name: item?.name || '',
+        };
+      }),
+    }));
+
+    const res = await api.exportPdf({
+      canvasWidth: config.canvas.width,
+      canvasHeight: config.canvas.height,
+      canvases,
+      bleed: config.globalBleed,
+      showCropMarks: true,
+      outputPath,
+    });
+
+    if (res.success) {
+      showToast('PDF 已导出');
+    } else {
+      showToast('导出失败: ' + res.error);
+    }
+  }, [result, items, config]);
 
   return (
-    <div className="toolbar">
-      {/* 隐藏的文件选择器 */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={(e) => handleFiles(e.target.files)}
-      />
+    <>
+      <div className="toolbar">
+        {/* Import */}
+        <div className="toolbar-group">
+          <button className="btn" onClick={openModal}>&#128206; 导入图片</button>
+        </div>
 
-      {/* 导入 */}
-      <div className="toolbar-group">
-        <button className="btn" onClick={handleImportClick}>&#128206; 导入图片</button>
+        <div className="toolbar-divider" />
+
+        {/* Layout control */}
+        <div className="toolbar-group">
+          <button
+            className="btn btn-primary"
+            onClick={handleLayout}
+            disabled={isComputing}
+          >
+            {isComputing ? '排版中...' : '\u25B6 自动排版'}
+          </button>
+          <select
+            className="select"
+            value={config.strategy}
+            onChange={(e) => setConfig({ strategy: e.target.value as PackingStrategy })}
+          >
+            <option value={PackingStrategy.BestShortSideFit}>短边优先 (BSSF)</option>
+            <option value={PackingStrategy.BestLongSideFit}>长边优先 (BLSF)</option>
+            <option value={PackingStrategy.BestAreaFit}>面积优先 (BAF)</option>
+            <option value={PackingStrategy.BottomLeft}>左下角 (BL)</option>
+          </select>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Canvas size */}
+        <div className="toolbar-group">
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>画布:</span>
+          <input
+            className="input"
+            type="number"
+            value={config.canvas.width}
+            onChange={(e) => setCanvasSize(Number(e.target.value), config.canvas.height)}
+            style={{ width: 55 }}
+          />
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>x</span>
+          <input
+            className="input"
+            type="number"
+            value={config.canvas.height}
+            onChange={(e) => setCanvasSize(config.canvas.width, Number(e.target.value))}
+            style={{ width: 55 }}
+          />
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>mm</span>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Spacing & Bleed */}
+        <div className="toolbar-group">
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>间距:</span>
+          <input
+            className="input"
+            type="number"
+            style={{ width: 40 }}
+            value={config.globalSpacing}
+            onChange={(e) => setConfig({ globalSpacing: Number(e.target.value) })}
+          />
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>出血:</span>
+          <input
+            className="input"
+            type="number"
+            style={{ width: 40 }}
+            value={config.globalBleed}
+            onChange={(e) => setConfig({ globalBleed: Number(e.target.value) })}
+          />
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        {/* Zoom */}
+        <div className="toolbar-group">
+          <button className="btn" onClick={() => setZoom(zoom - 0.05)}>−</button>
+          <span style={{ fontSize: 12, minWidth: 36, textAlign: 'center' }}>
+            {Math.round(zoom * 100)}%
+          </span>
+          <button className="btn" onClick={() => setZoom(zoom + 0.05)}>+</button>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Export */}
+        <div className="toolbar-group">
+          <button className="btn" onClick={handleExportPng}>&#128190; 导出PNG</button>
+          <button className="btn" onClick={handleExportPdf}>&#128196; 导出PDF</button>
+        </div>
       </div>
 
-      <div className="toolbar-divider" />
+      {/* Import Modal */}
+      {showModal && (
+        <div className="modal-bg" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}>
+          <div className="modal">
+            <h3>导入图片素材</h3>
 
-      {/* 排版控制 */}
-      <div className="toolbar-group">
-        <button
-          className="btn btn-primary"
-          onClick={runAutoLayout}
-          disabled={isComputing}
-        >
-          {isComputing ? '排版中...' : '&#9654; 自动排版'}
-        </button>
-        <select
-          className="select"
-          value={config.strategy}
-          onChange={(e) => setConfig({ strategy: e.target.value as PackingStrategy })}
-        >
-          <option value={PackingStrategy.BestShortSideFit}>短边优先 (BSSF)</option>
-          <option value={PackingStrategy.BestLongSideFit}>长边优先 (BLSF)</option>
-          <option value={PackingStrategy.BestAreaFit}>面积优先 (BAF)</option>
-          <option value={PackingStrategy.BottomLeft}>左下角 (BL)</option>
-        </select>
-      </div>
+            {/* Upload area */}
+            <input
+              ref={modalFileRef}
+              type="file"
+              multiple
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={(e) => e.target.files && processModalFiles(e.target.files)}
+            />
+            <div
+              className={`upload-area${modalPreviews.length > 0 ? ' has-file' : ''}`}
+              onClick={() => modalFileRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); }}
+              onDrop={(e) => { e.preventDefault(); processModalFiles(Array.from(e.dataTransfer.files)); }}
+            >
+              {modalPreviews.length > 0 ? (
+                <div style={{ color: 'var(--success)', fontSize: 13, fontWeight: 600 }}>
+                  已选择 {modalPreviews.length} 个文件
+                </div>
+              ) : (
+                <div className="upload-text">
+                  点击选择图片 或 拖拽图片到此处<br /><br />
+                  <strong>支持 PNG / JPG / SVG / BMP</strong>
+                </div>
+              )}
+              {modalPreviews.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
+                  {modalPreviews.map((p, i) => (
+                    <img
+                      key={i}
+                      src={p.src}
+                      className="upload-preview"
+                      title={`${p.name} (${p.pw}x${p.ph}px → ${p.mmW}x${p.mmH}mm)`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
 
-      <div className="toolbar-divider" />
+            {/* DPI */}
+            <div className="modal-row">
+              <label>DPI</label>
+              <input
+                type="number"
+                value={modalDpi}
+                onChange={(e) => handleDpiChange(Number(e.target.value))}
+                style={{ width: 80 }}
+              />
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>(影响尺寸换算)</span>
+            </div>
 
-      {/* 画布设置 */}
-      <div className="toolbar-group">
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>画布:</span>
-        <input
-          className="input"
-          type="number"
-          value={config.canvas.width}
-          onChange={(e) => setCanvasSize(Number(e.target.value), config.canvas.height)}
-        />
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>x</span>
-        <input
-          className="input"
-          type="number"
-          value={config.canvas.height}
-          onChange={(e) => setCanvasSize(config.canvas.width, Number(e.target.value))}
-        />
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>mm</span>
-      </div>
+            {/* Quantity */}
+            <div className="modal-row">
+              <label>默认数量</label>
+              <input
+                type="number"
+                value={modalQty}
+                onChange={(e) => setModalQty(Number(e.target.value))}
+              />
+            </div>
 
-      <div className="toolbar-divider" />
-
-      {/* 全局参数 */}
-      <div className="toolbar-group">
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>间距:</span>
-        <input
-          className="input"
-          type="number"
-          style={{ width: 50 }}
-          value={config.globalSpacing}
-          onChange={(e) => setConfig({ globalSpacing: Number(e.target.value) })}
-        />
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>出血:</span>
-        <input
-          className="input"
-          type="number"
-          style={{ width: 50 }}
-          value={config.globalBleed}
-          onChange={(e) => setConfig({ globalBleed: Number(e.target.value) })}
-        />
-      </div>
-
-      <div style={{ flex: 1 }} />
-
-      {/* 缩放 */}
-      <div className="toolbar-group">
-        <button className="btn" onClick={() => setZoom(zoom - 0.1)}>-</button>
-        <span style={{ fontSize: 12, minWidth: 40, textAlign: 'center' }}>
-          {Math.round(zoom * 100)}%
-        </span>
-        <button className="btn" onClick={() => setZoom(zoom + 0.1)}>+</button>
-      </div>
-
-      <div className="toolbar-divider" />
-
-      {/* 导出 */}
-      <div className="toolbar-group">
-        <button className="btn" onClick={handleExportPng}>&#128190; 导出 PNG</button>
-      </div>
-    </div>
+            {/* Actions */}
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setShowModal(false)}>取消</button>
+              <button className="btn btn-primary" onClick={addFromModal}>添加到素材列表</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

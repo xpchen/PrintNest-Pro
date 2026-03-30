@@ -84,6 +84,15 @@ export class MaxRectsBin {
   }
 
   /**
+   * 预占一个位置（用于锁定元素），不做寻位，直接占据指定矩形区域
+   */
+  occupy(rect: Rect): void {
+    this.splitFreeRects(rect);
+    this.pruneFreeRects();
+    this.usedRects.push({ id: '__occupied', x: rect.x, y: rect.y, width: rect.width, height: rect.height, rotated: false });
+  }
+
+  /**
    * 根据策略找到最佳放置位置
    */
   private findBestPosition(

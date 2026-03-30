@@ -1,111 +1,227 @@
 /**
  * 右侧属性面板
- * 显示选中元素的详细信息，支持编辑
+ * 支持单选和多选模式，属性可编辑，带锁定/删除/复制操作
  */
 import React from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { showToast } from '../utils/toast';
 
 export const Inspector: React.FC = () => {
-  const { result, selectedIds, items, activeCanvasIndex, toggleLock } = useAppStore();
+  const {
+    result, selectedIds, items, activeCanvasIndex, config,
+    toggleLock, batchLock, deleteSelected, setSelectedIds,
+    updatePlacement, updateItem, duplicateItem,
+  } = useAppStore();
 
-  // 获取选中的 placement
-  const selectedPlacement = result?.canvases[activeCanvasIndex]?.placements.find(
-    (p) => selectedIds.includes(p.id)
-  );
+  const currentCanvas = result?.canvases[activeCanvasIndex];
+  const selPlacements = currentCanvas
+    ? currentCanvas.placements.filter((p) => selectedIds.includes(p.id))
+    : [];
+  const selCount = selPlacements.length;
 
-  // 获取对应的 PrintItem
-  const relatedItem = selectedPlacement
-    ? items.find((i) => i.id === selectedPlacement.printItemId)
-    : null;
-
-  if (!selectedPlacement || !relatedItem) {
+  // Empty state
+  if (selCount === 0) {
     return (
       <div className="inspector">
         <div className="inspector-title">属性面板</div>
         <div className="empty-state" style={{ height: 200 }}>
           <div style={{ fontSize: 28, opacity: 0.3 }}>&#128065;</div>
-          <div style={{ fontSize: 12 }}>点击画布上的元素查看属性</div>
+          <div style={{ fontSize: 12 }}>点击画布元素查看属性</div>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 12, lineHeight: 1.8, textAlign: 'center' }}>
+            操作提示:<br />
+            左键 = 选中/拖拽<br />
+            Shift+点击 = 多选<br />
+            框选 = 批量选中<br />
+            右键 = 锁定/解锁<br />
+            Delete = 删除选中<br />
+            Alt+拖拽 = 平移画布<br />
+            滚轮 = 缩放
+          </div>
         </div>
       </div>
     );
   }
 
+  // Multi-select mode
+  if (selCount > 1) {
+    const lockedCount = selPlacements.filter((p) => p.locked).length;
+    const unlockedCount = selCount - lockedCount;
+
+    return (
+      <div className="inspector">
+        <div className="inspector-title">属性面板</div>
+
+        <div className="inspector-section">
+          <div className="inspector-section-title">多选</div>
+          <div className="inspector-row">
+            <span className="inspector-label" style={{ width: 50 }}>已选</span>
+            <span style={{ fontSize: 13, color: 'var(--accent)' }}>{selCount} 个元素</span>
+          </div>
+          <div className="inspector-row">
+            <span className="inspector-label" style={{ width: 50 }}>锁定</span>
+            <span style={{ fontSize: 13 }}>{lockedCount} 锁定 / {unlockedCount} 未锁定</span>
+          </div>
+        </div>
+
+        <div className="inspector-section">
+          <div className="inspector-section-title">批量操作</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn" onClick={() => { batchLock(selectedIds, true); showToast(`已锁定 ${selCount} 个`); }}>
+              🔒 全部锁定
+            </button>
+            <button className="btn" onClick={() => { batchLock(selectedIds, false); showToast(`已解锁 ${selCount} 个`); }}>
+              🔓 全部解锁
+            </button>
+            <button className="btn btn-danger" onClick={deleteSelected}>
+              🗑 删除全部 ({selCount})
+            </button>
+            {currentCanvas && (
+              <button
+                className="btn"
+                onClick={() => setSelectedIds(currentCanvas.placements.map((p) => p.id))}
+              >
+                全选
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Single-select mode
+  const sel = selPlacements[0];
+  const relatedItem = items.find((i) => i.id === sel.printItemId);
+
   return (
     <div className="inspector">
       <div className="inspector-title">属性面板</div>
 
-      {/* 基本信息 */}
+      {/* Thumbnail */}
+      {relatedItem?.imageSrc && (
+        <div
+          className="ins-thumb"
+          style={{ backgroundImage: `url(${relatedItem.imageSrc})` }}
+        />
+      )}
+
+      {/* Basic info */}
       <div className="inspector-section">
         <div className="inspector-section-title">基本信息</div>
         <div className="inspector-row">
           <span className="inspector-label" style={{ width: 50 }}>名称</span>
-          <span style={{ fontSize: 13 }}>{relatedItem.name}</span>
+          <span style={{ fontSize: 13 }}>{relatedItem?.name ?? '未知'}</span>
         </div>
         <div className="inspector-row">
           <span className="inspector-label" style={{ width: 50 }}>状态</span>
-          <span style={{ fontSize: 13, color: selectedPlacement.locked ? 'var(--warning)' : 'var(--success)' }}>
-            {selectedPlacement.locked ? '已锁定' : '未锁定'}
+          <span style={{ fontSize: 13, color: sel.locked ? 'var(--warning)' : 'var(--success)' }}>
+            {sel.locked ? '🔒 已锁定' : '已解锁'}
           </span>
         </div>
       </div>
 
-      {/* 位置 */}
+      {/* Position - editable */}
       <div className="inspector-section">
         <div className="inspector-section-title">位置</div>
         <div className="inspector-row">
           <span className="inspector-label">X</span>
-          <input className="inspector-input" type="number" value={Math.round(selectedPlacement.x)} readOnly />
+          <input
+            className="inspector-input"
+            type="number"
+            value={Math.round(sel.x)}
+            onChange={(e) => updatePlacement(sel.id, { x: Number(e.target.value) })}
+          />
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>mm</span>
         </div>
         <div className="inspector-row">
           <span className="inspector-label">Y</span>
-          <input className="inspector-input" type="number" value={Math.round(selectedPlacement.y)} readOnly />
+          <input
+            className="inspector-input"
+            type="number"
+            value={Math.round(sel.y)}
+            onChange={(e) => updatePlacement(sel.id, { y: Number(e.target.value) })}
+          />
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>mm</span>
         </div>
       </div>
 
-      {/* 尺寸 */}
+      {/* Size */}
       <div className="inspector-section">
         <div className="inspector-section-title">尺寸</div>
         <div className="inspector-row">
           <span className="inspector-label">W</span>
-          <input className="inspector-input" type="number" value={Math.round(selectedPlacement.width)} readOnly />
+          <span style={{ fontSize: 13 }}>{Math.round(sel.width)} mm</span>
         </div>
         <div className="inspector-row">
           <span className="inspector-label">H</span>
-          <input className="inspector-input" type="number" value={Math.round(selectedPlacement.height)} readOnly />
+          <span style={{ fontSize: 13 }}>{Math.round(sel.height)} mm</span>
         </div>
         <div className="inspector-row">
           <span className="inspector-label" style={{ width: 50 }}>旋转</span>
-          <span style={{ fontSize: 13 }}>{selectedPlacement.rotated ? '90°' : '0°'}</span>
+          <span style={{ fontSize: 13 }}>{sel.rotated ? '90°' : '0°'}</span>
         </div>
       </div>
 
-      {/* 参数 */}
-      <div className="inspector-section">
-        <div className="inspector-section-title">排版参数</div>
-        <div className="inspector-row">
-          <span className="inspector-label" style={{ width: 50 }}>间距</span>
-          <span style={{ fontSize: 13 }}>{relatedItem.spacing} mm</span>
+      {/* Layout params - editable */}
+      {relatedItem && (
+        <div className="inspector-section">
+          <div className="inspector-section-title">排版参数</div>
+          <div className="inspector-row">
+            <span className="inspector-label" style={{ width: 50 }}>间距</span>
+            <input
+              className="inspector-input"
+              type="number"
+              min={0}
+              value={relatedItem.spacing || 0}
+              onChange={(e) => updateItem(relatedItem.id, { spacing: Number(e.target.value) })}
+            />
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>mm</span>
+          </div>
+          <div className="inspector-row">
+            <span className="inspector-label" style={{ width: 50 }}>出血</span>
+            <input
+              className="inspector-input"
+              type="number"
+              min={0}
+              value={relatedItem.bleed || 0}
+              onChange={(e) => updateItem(relatedItem.id, { bleed: Number(e.target.value) })}
+            />
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>mm</span>
+          </div>
+          <div className="inspector-row">
+            <span className="inspector-label" style={{ width: 50 }}>优先级</span>
+            <input
+              className="inspector-input"
+              type="number"
+              value={relatedItem.priority}
+              onChange={(e) => updateItem(relatedItem.id, { priority: Number(e.target.value) })}
+            />
+          </div>
+          <div className="inspector-row">
+            <span className="inspector-label" style={{ width: 50 }}>分组</span>
+            <input
+              className="inspector-input"
+              type="text"
+              value={relatedItem.group || ''}
+              placeholder="无"
+              onChange={(e) => updateItem(relatedItem.id, { group: e.target.value || undefined })}
+            />
+          </div>
         </div>
-        <div className="inspector-row">
-          <span className="inspector-label" style={{ width: 50 }}>出血</span>
-          <span style={{ fontSize: 13 }}>{relatedItem.bleed} mm</span>
-        </div>
-        <div className="inspector-row">
-          <span className="inspector-label" style={{ width: 50 }}>分组</span>
-          <span style={{ fontSize: 13 }}>{relatedItem.group || '无'}</span>
-        </div>
-        <div className="inspector-row">
-          <span className="inspector-label" style={{ width: 50 }}>优先级</span>
-          <span style={{ fontSize: 13 }}>{relatedItem.priority}</span>
-        </div>
-      </div>
+      )}
 
-      {/* 操作 */}
+      {/* Actions */}
       <div className="inspector-section">
         <div className="inspector-section-title">操作</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => toggleLock(selectedPlacement.id)}>
-            {selectedPlacement.locked ? '解锁' : '锁定'}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn" onClick={() => { toggleLock(sel.id); showToast(sel.locked ? '已解锁' : '已锁定'); }}>
+            {sel.locked ? '🔓 解锁' : '🔒 锁定'}
+          </button>
+          <button className="btn" onClick={() => { duplicateItem(sel.printItemId); showToast('已复制素材'); }}>
+            📋 复制
+          </button>
+          <button className="btn btn-danger" onClick={deleteSelected}>
+            🗑 删除
           </button>
         </div>
       </div>

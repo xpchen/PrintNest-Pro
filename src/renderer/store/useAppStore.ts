@@ -48,12 +48,17 @@ interface AppState {
   addItem: (item: Omit<PrintItem, 'id' | 'color' | 'priority' | 'allowRotation' | 'spacing' | 'bleed'> & Partial<PrintItem>) => void;
   removeItem: (id: string) => void;
   updateItem: (id: string, patch: Partial<PrintItem>) => void;
+  clearItems: () => void;
   setConfig: (patch: Partial<LayoutConfig>) => void;
   setCanvasSize: (width: number, height: number) => void;
   runAutoLayout: () => void;
   setActiveCanvas: (index: number) => void;
   setSelectedIds: (ids: string[]) => void;
   toggleLock: (placementId: string) => void;
+  batchLock: (ids: string[], locked: boolean) => void;
+  deleteSelected: () => void;
+  updatePlacement: (placementId: string, patch: Partial<Placement>) => void;
+  duplicateItem: (printItemId: string) => void;
   setZoom: (zoom: number) => void;
 }
 
@@ -100,6 +105,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
+  clearItems: () => {
+    set({ items: [], result: null, selectedIds: [] });
+  },
+
   setConfig: (patch) => {
     set((s) => ({ config: { ...s.config, ...patch } }));
   },
@@ -110,11 +119,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   runAutoLayout: () => {
     set({ isComputing: true });
-    // 使用 setTimeout 让 UI 先更新 loading 状态
     setTimeout(() => {
-      const { items, config } = get();
-      const result = runLayout(items, config);
-      set({ result, isComputing: false, activeCanvasIndex: 0 });
+      const { items, config, result: prevResult } = get();
+      // 收集所有画布中的锁定元素
+      const locked: Placement[] = [];
+      if (prevResult) {
+        for (const c of prevResult.canvases) {
+          for (const p of c.placements) {
+            if (p.locked) locked.push(p);
+          }
+        }
+      }
+      const result = runLayout(items, config, locked.length > 0 ? locked : undefined);
+      set({ result, isComputing: false, activeCanvasIndex: 0, selectedIds: [] });
     }, 10);
   },
 
@@ -133,6 +150,64 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
       return { result: { ...s.result, canvases: newCanvases } };
     });
+  },
+
+  batchLock: (ids, locked) => {
+    set((s) => {
+      if (!s.result) return s;
+      const idSet = new Set(ids);
+      const newCanvases = s.result.canvases.map((c) => ({
+        ...c,
+        placements: c.placements.map((p) =>
+          idSet.has(p.id) ? { ...p, locked } : p
+        ),
+      }));
+      return { result: { ...s.result, canvases: newCanvases } };
+    });
+  },
+
+  deleteSelected: () => {
+    set((s) => {
+      if (!s.result || s.selectedIds.length === 0) return s;
+      const idSet = new Set(s.selectedIds);
+      const canvasArea = s.config.canvas.width * s.config.canvas.height;
+      const newCanvases = s.result.canvases.map((c) => {
+        const newPlacements = c.placements.filter((p) => !idSet.has(p.id));
+        const used = newPlacements.reduce((sum, p) => sum + p.width * p.height, 0);
+        return { ...c, placements: newPlacements, utilization: canvasArea > 0 ? used / canvasArea : 0 };
+      });
+      const totalUsed = newCanvases.reduce((s2, c) => s2 + c.placements.reduce((ss, p) => ss + p.width * p.height, 0), 0);
+      const totalArea = newCanvases.length * canvasArea;
+      return {
+        result: { ...s.result, canvases: newCanvases, totalUtilization: totalArea > 0 ? totalUsed / totalArea : 0 },
+        selectedIds: [],
+      };
+    });
+  },
+
+  updatePlacement: (placementId, patch) => {
+    set((s) => {
+      if (!s.result) return s;
+      const newCanvases = s.result.canvases.map((c) => ({
+        ...c,
+        placements: c.placements.map((p) =>
+          p.id === placementId ? { ...p, ...patch } : p
+        ),
+      }));
+      return { result: { ...s.result, canvases: newCanvases } };
+    });
+  },
+
+  duplicateItem: (printItemId) => {
+    const item = get().items.find((i) => i.id === printItemId);
+    if (!item) return;
+    const newItem: PrintItem = {
+      ...item,
+      id: genId(),
+      name: item.name + ' (副本)',
+      color: nextColor(),
+    };
+    set((s) => ({ items: [...s.items, newItem] }));
   },
 
   setZoom: (zoom) => set({ zoom: Math.max(0.1, Math.min(3, zoom)) }),

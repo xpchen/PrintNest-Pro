@@ -2,7 +2,7 @@
   "name": "printnest-pro",
   "version": "1.0.0",
   "description": "印智排版系统 - 印花行业自动排版软件",
-  "main": "dist/main/index.js",
+  "main": "dist/main/main/index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",
     "dev:renderer": "vite",
@@ -10,11 +10,12 @@
     "build": "npm run build:renderer && npm run build:main",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
-    "start": "electron dist/main/index.js",
+    "start": "electron dist/main/main/index.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
   "dependencies": {
+    "pdfkit": "^0.15.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.0"

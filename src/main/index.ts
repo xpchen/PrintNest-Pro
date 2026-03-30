@@ -1,5 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
+import { registerFileManagerIPC } from './fileManager';
+import { registerPdfExportIPC } from './pdfExport';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -18,9 +20,23 @@ function createWindow() {
   });
 
   // Dev mode: load Vite dev server; Production: load built files
-  const isDev = process.env.NODE_ENV === 'development';
+  const isDev = !app.isPackaged;
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    // Try common Vite dev server ports
+    const tryLoadDev = async () => {
+      for (const port of [5173, 5174, 5175]) {
+        try {
+          await mainWindow!.loadURL(`http://localhost:${port}`);
+          return true;
+        } catch {
+          continue;
+        }
+      }
+      return false;
+    };
+    tryLoadDev().then((ok) => {
+      if (!ok) mainWindow!.loadFile(path.join(__dirname, '../renderer/index.html'));
+    });
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
@@ -36,7 +52,7 @@ ipcMain.handle('dialog:openFiles', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile', 'multiSelections'],
     filters: [
-      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'tiff', 'svg'] },
+      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'tiff', 'svg', 'webp'] },
     ],
   });
   return result.filePaths;
@@ -50,6 +66,10 @@ ipcMain.handle('dialog:saveFile', async (_event, defaultName: string, filterName
   });
   return result.filePath;
 });
+
+// Register file manager & PDF export IPC handlers
+registerFileManagerIPC();
+registerPdfExportIPC();
 
 app.whenReady().then(createWindow);
 
