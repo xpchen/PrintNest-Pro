@@ -19,11 +19,24 @@ function getAppDataDir(): string {
   return dir;
 }
 
-/** 获取项目目录 */
-function getProjectDir(projectId: string): string {
+/** 获取项目根目录（不存在则创建），供素材/DB/自动保存共用 */
+export function getProjectDirectory(projectId: string): string {
   const dir = path.join(getAppDataDir(), projectId);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+/** 产品级目录：assets / exports / snapshots / temp */
+export function ensureProjectLayout(projectId: string): void {
+  const root = getProjectDirectory(projectId);
+  for (const name of ['assets', 'exports', 'snapshots', 'temp']) {
+    const sub = path.join(root, name);
+    if (!fs.existsSync(sub)) fs.mkdirSync(sub, { recursive: true });
+  }
+}
+
+function getProjectDir(projectId: string): string {
+  return getProjectDirectory(projectId);
 }
 
 /** 获取素材目录 */
@@ -53,6 +66,7 @@ function importAssets(projectId: string, srcPaths: string[]): string[] {
 
 /** 保存项目数据 */
 function saveProject(projectId: string, data: object): void {
+  ensureProjectLayout(projectId);
   const projectDir = getProjectDir(projectId);
   const filePath = path.join(projectDir, 'project.json');
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
@@ -99,7 +113,14 @@ export function registerFileManagerIPC(): void {
 
   // 加载项目
   ipcMain.handle('file:loadProject', async (_event, projectId: string) => {
+    ensureProjectLayout(projectId);
     return loadProject(projectId);
+  });
+
+  // 自动保存（定时器由渲染进程触发，写入 project.json）
+  ipcMain.handle('file:autoSaveProject', async (_event, projectId: string, data: object) => {
+    saveProject(projectId, data);
+    return true;
   });
 
   // 列出项目

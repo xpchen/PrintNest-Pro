@@ -8,7 +8,7 @@ import { showToast } from '../utils/toast';
 
 export const Inspector: React.FC = () => {
   const {
-    result, selectedIds, items, activeCanvasIndex, config,
+    result, selectedIds, items, activeCanvasIndex,
     toggleLock, batchLock, deleteSelected, setSelectedIds,
     updatePlacement, updateItem, duplicateItem,
   } = useAppStore();
@@ -147,7 +147,7 @@ export const Inspector: React.FC = () => {
 
       {/* Size */}
       <div className="inspector-section">
-        <div className="inspector-section-title">尺寸</div>
+        <div className="inspector-section-title">尺寸（画布上为排版占用，含出血/间距）</div>
         <div className="inspector-row">
           <span className="inspector-label">W</span>
           <span style={{ fontSize: 13 }}>{Math.round(sel.width)} mm</span>
@@ -172,7 +172,7 @@ export const Inspector: React.FC = () => {
               className="inspector-input"
               type="number"
               min={0}
-              value={relatedItem.spacing || 0}
+              value={relatedItem.spacing}
               onChange={(e) => updateItem(relatedItem.id, { spacing: Number(e.target.value) })}
             />
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>mm</span>
@@ -183,7 +183,7 @@ export const Inspector: React.FC = () => {
               className="inspector-input"
               type="number"
               min={0}
-              value={relatedItem.bleed || 0}
+              value={relatedItem.bleed}
               onChange={(e) => updateItem(relatedItem.id, { bleed: Number(e.target.value) })}
             />
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>mm</span>

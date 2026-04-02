@@ -11,11 +11,17 @@ import {
   LayoutResult,
   CanvasResult,
 } from '../types';
-import { MaxRectsBin, PackingItem, Rect } from './MaxRectsEngine';
+import { MaxRectsBin, PackingItem } from './MaxRectsEngine';
 
-let _uid = 0;
-function uid(): string {
-  return `lu_${++_uid}_${Date.now()}`;
+/** 稳定 LayoutUnit ID：与 printItemId + 展开序号绑定，锁定重排可正确排除已锁单元 */
+export function makeLayoutUnitId(printItemId: string, instanceIndex: number): string {
+  return `lu_${printItemId}_${instanceIndex}`;
+}
+
+/** 间距/出血：0 为合法值；仅非有限数回退到全局 */
+function resolveSpacingBleed(value: number, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 /**
@@ -26,21 +32,27 @@ export function expandItems(items: PrintItem[], config: LayoutConfig): LayoutUni
   const units: LayoutUnit[] = [];
 
   for (const item of items) {
-    const spacing = item.spacing || config.globalSpacing;
-    const bleed = item.bleed || config.globalBleed;
+    const spacing = resolveSpacingBleed(item.spacing, config.globalSpacing);
+    const bleed = resolveSpacingBleed(item.bleed, config.globalBleed);
+    const ow = Number(item.width);
+    const oh = Number(item.height);
+    if (!Number.isFinite(ow) || !Number.isFinite(oh) || ow <= 0 || oh <= 0) {
+      continue;
+    }
+    const q = Math.max(1, Math.floor(Number(item.quantity) || 1));
     // 排版尺寸 = 原始尺寸 + 2*出血 + 间距
-    const packedWidth = item.width + bleed * 2 + spacing;
-    const packedHeight = item.height + bleed * 2 + spacing;
+    const packedWidth = ow + bleed * 2 + spacing;
+    const packedHeight = oh + bleed * 2 + spacing;
 
-    for (let i = 0; i < item.quantity; i++) {
+    for (let i = 0; i < q; i++) {
       units.push({
-        id: uid(),
+        id: makeLayoutUnitId(item.id, i),
         printItemId: item.id,
         instanceIndex: i,
         packedWidth,
         packedHeight,
-        originalWidth: item.width,
-        originalHeight: item.height,
+        originalWidth: ow,
+        originalHeight: oh,
         allowRotation: item.allowRotation && config.allowRotation,
         group: item.group,
         priority: item.priority,
@@ -150,38 +162,42 @@ export function runLayout(
       }
     }
 
-    // 已有画布都放不下 → 新开一个画布
+    // 已有画布都放不下 → 新开一个画布（单画布模式下不新开，记入未排入）
     if (!placed) {
-      const newBin = new MaxRectsBin(config.canvas.width, config.canvas.height);
-      const result = newBin.insert(
-        {
-          id: unit.id,
-          width: unit.packedWidth,
-          height: unit.packedHeight,
-          allowRotation: unit.allowRotation,
-        } as PackingItem,
-        config.strategy
-      );
-
-      if (result) {
-        const idx = bins.length;
-        bins.push(newBin);
-        placementMap.set(idx, [
-          {
-            id: `p_${result.id}`,
-            layoutUnitId: unit.id,
-            printItemId: unit.printItemId,
-            canvasIndex: idx,
-            x: result.x,
-            y: result.y,
-            width: result.width,
-            height: result.height,
-            rotated: result.rotated,
-            locked: false,
-          },
-        ]);
-      } else {
+      if (config.singleCanvas && bins.length >= 1) {
         unplaced.push(unit);
+      } else {
+        const newBin = new MaxRectsBin(config.canvas.width, config.canvas.height);
+        const result = newBin.insert(
+          {
+            id: unit.id,
+            width: unit.packedWidth,
+            height: unit.packedHeight,
+            allowRotation: unit.allowRotation,
+          } as PackingItem,
+          config.strategy
+        );
+
+        if (result) {
+          const idx = bins.length;
+          bins.push(newBin);
+          placementMap.set(idx, [
+            {
+              id: `p_${result.id}`,
+              layoutUnitId: unit.id,
+              printItemId: unit.printItemId,
+              canvasIndex: idx,
+              x: result.x,
+              y: result.y,
+              width: result.width,
+              height: result.height,
+              rotated: result.rotated,
+              locked: false,
+            },
+          ]);
+        } else {
+          unplaced.push(unit);
+        }
       }
     }
   }

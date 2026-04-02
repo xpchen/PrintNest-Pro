@@ -10,6 +10,7 @@ import {
   PackingStrategy,
 } from '../../shared/types';
 import { runLayout } from '../../shared/engine';
+import { buildLayoutSignature } from '../../shared/layoutSignature';
 
 /** 随机颜色生成 */
 const COLORS = [
@@ -43,6 +44,10 @@ interface AppState {
   isComputing: boolean;
   // 缩放比例
   zoom: number;
+  /** 上次执行自动排版时的素材+配置指纹；与当前不一致则说明画布已过期 */
+  layoutSourceSignature: string | null;
+  /** 当前项目 ID（与主进程项目目录名一致，用于自动保存与 layout_runs） */
+  currentProjectId: string;
 
   // Actions
   addItem: (item: Omit<PrintItem, 'id' | 'color' | 'priority' | 'allowRotation' | 'spacing' | 'bleed'> & Partial<PrintItem>) => void;
@@ -51,7 +56,8 @@ interface AppState {
   clearItems: () => void;
   setConfig: (patch: Partial<LayoutConfig>) => void;
   setCanvasSize: (width: number, height: number) => void;
-  runAutoLayout: () => void;
+  /** 在 Electron 下可走主进程 Worker；否则同步计算。返回 Promise 便于在排版结束后更新 UI。 */
+  runAutoLayout: () => Promise<void>;
   setActiveCanvas: (index: number) => void;
   setSelectedIds: (ids: string[]) => void;
   toggleLock: (placementId: string) => void;
@@ -60,6 +66,7 @@ interface AppState {
   updatePlacement: (placementId: string, patch: Partial<Placement>) => void;
   duplicateItem: (printItemId: string) => void;
   setZoom: (zoom: number) => void;
+  setCurrentProjectId: (id: string) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -70,20 +77,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     allowRotation: true,
     globalSpacing: 2,
     globalBleed: 3,
+    singleCanvas: false,
   },
   result: null,
   activeCanvasIndex: 0,
   selectedIds: [],
   isComputing: false,
   zoom: 0.5,
+  layoutSourceSignature: null,
+  currentProjectId: 'default',
 
   addItem: (partial) => {
     const item: PrintItem = {
       id: genId(),
       name: partial.name,
-      width: partial.width,
-      height: partial.height,
-      quantity: partial.quantity,
+      width: Number(partial.width) || 0,
+      height: Number(partial.height) || 0,
+      quantity: Math.max(1, Math.floor(Number(partial.quantity) || 1)),
       imageSrc: partial.imageSrc,
       group: partial.group,
       priority: partial.priority ?? 0,
@@ -106,7 +116,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   clearItems: () => {
-    set({ items: [], result: null, selectedIds: [] });
+    set({ items: [], result: null, selectedIds: [], layoutSourceSignature: null });
   },
 
   setConfig: (patch) => {
@@ -119,9 +129,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   runAutoLayout: () => {
     set({ isComputing: true });
-    setTimeout(() => {
-      const { items, config, result: prevResult } = get();
-      // 收集所有画布中的锁定元素
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+
+    const compute = async (): Promise<LayoutResult> => {
+      const { items, config, result: prevResult, currentProjectId } = get();
       const locked: Placement[] = [];
       if (prevResult) {
         for (const c of prevResult.canvases) {
@@ -130,9 +141,45 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         }
       }
-      const result = runLayout(items, config, locked.length > 0 ? locked : undefined);
-      set({ result, isComputing: false, activeCanvasIndex: 0, selectedIds: [] });
-    }, 10);
+      const payload = {
+        items,
+        config,
+        locked: locked.length > 0 ? locked : undefined,
+        projectId: currentProjectId,
+      };
+      if (api?.runLayoutJob) {
+        return api.runLayoutJob(payload);
+      }
+      return runLayout(items, config, locked.length > 0 ? locked : undefined);
+    };
+
+    const finish = (result: LayoutResult) => {
+      const { items, config } = get();
+      const layoutSourceSignature = buildLayoutSignature(items, config);
+      set({
+        result,
+        isComputing: false,
+        activeCanvasIndex: 0,
+        selectedIds: [],
+        layoutSourceSignature,
+      });
+    };
+
+    return new Promise<void>((resolve, reject) => {
+      const run = () => {
+        compute()
+          .then((result) => {
+            finish(result);
+            resolve();
+          })
+          .catch((e) => {
+            set({ isComputing: false });
+            reject(e);
+          });
+      };
+      // 让 React 先提交「排版中」再开始计算（避免同步阻塞同一帧）
+      requestAnimationFrame(run);
+    });
   },
 
   setActiveCanvas: (index) => set({ activeCanvasIndex: index }),
@@ -211,4 +258,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setZoom: (zoom) => set({ zoom: Math.max(0.1, Math.min(3, zoom)) }),
+
+  setCurrentProjectId: (id) => set({ currentProjectId: id || 'default' }),
 }));

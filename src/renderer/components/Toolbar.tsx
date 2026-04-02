@@ -104,14 +104,68 @@ export const Toolbar: React.FC = () => {
     showToast(`已导入 ${modalPreviews.length} 个素材`);
   }, [modalPreviews, modalQty, addItem]);
 
+  /** Import rows from Excel (内部单号 + 尺寸 cm) */
+  const handleImportExcel = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!api?.openExcelFile || !api?.parseExcelImport) {
+      showToast('Excel 导入不可用（非 Electron 环境）');
+      return;
+    }
+    const paths = await api.openExcelFile();
+    if (!paths || paths.length === 0) return;
+
+    const res = await api.parseExcelImport(paths[0]);
+    if (!res) {
+      showToast('解析失败');
+      return;
+    }
+    if (res.rows.length === 0) {
+      const hint = res.warnings[0] ?? '未解析到有效行';
+      showToast(hint);
+      return;
+    }
+
+    for (const row of res.rows) {
+      addItem({
+        name: row.name,
+        width: row.widthMm,
+        height: row.heightMm,
+        quantity: row.quantity,
+        imageSrc: '',
+      });
+    }
+
+    setConfig({ singleCanvas: true });
+
+    const w = res.warnings.length;
+    showToast(
+      w > 0
+        ? `已导入 ${res.rows.length} 条（已开启单画布），另有 ${w} 条提示（见控制台）`
+        : `已导入 ${res.rows.length} 条，已开启单画布模式`,
+    );
+    if (w > 0) {
+      console.warn('[Excel 导入]', res.warnings);
+    }
+  }, [addItem, setConfig]);
+
   /** Auto layout */
-  const handleLayout = useCallback(() => {
+  const handleLayout = useCallback(async () => {
     if (items.length === 0) {
       showToast('请先导入素材');
       return;
     }
-    runAutoLayout();
-    showToast('排版完成');
+    try {
+      await runAutoLayout();
+      const r = useAppStore.getState().result;
+      const u = r?.unplaced.length ?? 0;
+      if (u > 0) {
+        showToast(`排版完成，${u} 件未排入（可放大画布或关闭单画布）`);
+      } else {
+        showToast('排版完成');
+      }
+    } catch {
+      showToast('排版失败，请重试');
+    }
   }, [items, runAutoLayout]);
 
   /** Clean PNG export (2x scale, no UI chrome) */
@@ -169,7 +223,7 @@ export const Toolbar: React.FC = () => {
       showToast('请先执行排版');
       return;
     }
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.exportPdf) {
       showToast('PDF 导出仅在桌面端可用');
       return;
@@ -216,6 +270,9 @@ export const Toolbar: React.FC = () => {
         {/* Import */}
         <div className="toolbar-group">
           <button className="btn" onClick={openModal}>&#128206; 导入图片</button>
+          <button className="btn" onClick={handleImportExcel} title="表头需含「内部单号」「尺寸」，尺寸格式 宽-高（厘米）">
+            &#128196; 导入 Excel
+          </button>
         </div>
 
         <div className="toolbar-divider" />
@@ -239,6 +296,18 @@ export const Toolbar: React.FC = () => {
             <option value={PackingStrategy.BestAreaFit}>面积优先 (BAF)</option>
             <option value={PackingStrategy.BottomLeft}>左下角 (BL)</option>
           </select>
+          <label
+            className="toolbar-check"
+            style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}
+            title="开启后只使用一张画布，放不下的件计入「未排入」"
+          >
+            <input
+              type="checkbox"
+              checked={config.singleCanvas}
+              onChange={(e) => setConfig({ singleCanvas: e.target.checked })}
+            />
+            单画布
+          </label>
         </div>
 
         <div className="toolbar-divider" />

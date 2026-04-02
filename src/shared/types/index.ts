@@ -133,4 +133,11 @@ export interface LayoutConfig {
   globalSpacing: number;
   /** 全局出血 (mm) */
   globalBleed: number;
+  /**
+   * 为 true 时只使用一张画布排版，放不下则进入未排入列表（不自动新建画布）。
+   * 适合「一个 Excel 表 = 一张画布」等业务场景。
+   */
+  singleCanvas: boolean;
 }
+
+export * from './domain';

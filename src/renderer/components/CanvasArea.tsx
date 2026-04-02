@@ -6,6 +6,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Placement } from '../../shared/types';
+import { buildLayoutSignature } from '../../shared/layoutSignature';
 
 // ==================== Image Cache ====================
 const imageCache = new Map<string, HTMLImageElement>();
@@ -24,9 +25,14 @@ export const CanvasArea: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const {
-    result, config, items, activeCanvasIndex, selectedIds, zoom,
+    result, config, items, activeCanvasIndex, selectedIds, zoom, layoutSourceSignature,
     setActiveCanvas, setSelectedIds, toggleLock, updatePlacement, deleteSelected,
   } = useAppStore();
+
+  const layoutStale =
+    !!result &&
+    layoutSourceSignature !== null &&
+    buildLayoutSignature(items, config) !== layoutSourceSignature;
 
   const [offset, setOffset] = useState({ x: 30, y: 10 });
   const [isPanning, setIsPanning] = useState(false);
@@ -155,6 +161,17 @@ export const CanvasArea: React.FC = () => {
           ctx.strokeStyle = isSel ? '#fff' : 'rgba(0,0,0,.3)';
           ctx.lineWidth = isSel ? 2.5 / z : 0.5 / z;
           ctx.strokeRect(p.x, p.y, p.width, p.height);
+          if (p.width * z > 52 && p.height * z > 36) {
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.font = `${Math.max(6 / z, 7)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.fillText(
+              `${Math.round(p.width)}×${Math.round(p.height)}`,
+              p.x + p.width / 2,
+              p.y + p.height - 5 / z,
+            );
+            ctx.textAlign = 'start';
+          }
         } else {
           const color = item?.color ?? '#888';
           ctx.fillStyle = color + '88';
@@ -175,13 +192,29 @@ export const CanvasArea: React.FC = () => {
           ctx.fillText('\u{1F512}', p.x + p.width / 2 - 7 / z, p.y + p.height / 2 + 5 / z);
         }
 
-        // Name label (only when no image)
+        // Name + 排版占用尺寸（mm，含出血/间距；与侧栏「设计尺寸」可能不同）
         if (!img && p.width * z > 30 && p.height * z > 20) {
-          ctx.fillStyle = '#333';
           const fontSize = Math.max(7 / z, Math.min(10, p.width * 0.08) / z);
-          ctx.font = `${fontSize}px sans-serif`;
+          const showDim = p.width * z > 52 && p.height * z > 32;
+          const cy = p.y + p.height / 2;
           ctx.textAlign = 'center';
-          ctx.fillText(item?.name ?? '', p.x + p.width / 2, p.y + p.height / 2 + 3 / z);
+          ctx.fillStyle = '#333';
+          ctx.font = `${fontSize}px sans-serif`;
+          ctx.fillText(
+            item?.name ?? '',
+            p.x + p.width / 2,
+            cy - (showDim ? fontSize * 0.55 : 0),
+          );
+          if (showDim) {
+            ctx.fillStyle = '#555';
+            const sm = Math.max(6 / z, fontSize * 0.72);
+            ctx.font = `${sm}px sans-serif`;
+            ctx.fillText(
+              `${Math.round(p.width)}×${Math.round(p.height)} mm 占用`,
+              p.x + p.width / 2,
+              cy + Math.max(sm, fontSize * 0.45),
+            );
+          }
           ctx.textAlign = 'start';
         }
 
@@ -465,6 +498,12 @@ export const CanvasArea: React.FC = () => {
       onDrop={handleDrop}
     >
       {showDrop && <div className="drop-overlay">松开鼠标导入图片</div>}
+
+      {layoutStale && (
+        <div className="layout-stale-banner">
+          素材列表或画布设置已变更，与当前画布不一致。请重新点击「自动排版」后再查看尺寸。
+        </div>
+      )}
 
       {/* Canvas Tabs */}
       {result && result.canvases.length > 0 && (

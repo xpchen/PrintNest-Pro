@@ -1,0 +1,16 @@
+{
+  "description": "10 个矩形物料，用于小规模回归",
+  "config": {
+    "canvas": { "width": 800, "height": 1200 },
+    "strategy": "BSSF",
+    "allowRotation": true,
+    "globalSpacing": 2,
+    "globalBleed": 3,
+    "singleCanvas": false
+  },
+  "items": [
+    { "name": "A", "width": 100, "height": 80, "quantity": 2, "spacing": 2, "bleed": 3 },
+    { "name": "B", "width": 120, "height": 90, "quantity": 2, "spacing": 0, "bleed": 0 },
+    { "name": "C", "width": 60, "height": 60, "quantity": 6, "spacing": 1, "bleed": 1 }
+  ]
+}

@@ -130,7 +130,7 @@ export const Sidebar: React.FC = () => {
               <div className="sidebar-item-info">
                 <div className="sidebar-item-name">{item.name}</div>
                 <div className="sidebar-item-meta">
-                  {item.width}x{item.height}mm &middot; x{item.quantity}
+                  设计 {Math.round(item.width)}×{Math.round(item.height)} mm · x{item.quantity}
                   {item.group ? ` \u00b7 ${item.group}` : ''}
                 </div>
               </div>

@@ -1,0 +1,14 @@
+{
+  "description": "单画布模式：故意多量以产生未排入",
+  "config": {
+    "canvas": { "width": 400, "height": 400 },
+    "strategy": "BSSF",
+    "allowRotation": true,
+    "globalSpacing": 2,
+    "globalBleed": 2,
+    "singleCanvas": true
+  },
+  "items": [
+    { "name": "Big", "width": 200, "height": 200, "quantity": 5, "spacing": 2, "bleed": 2 }
+  ]
+}

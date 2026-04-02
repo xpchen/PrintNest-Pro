@@ -232,6 +232,16 @@ body {
   flex-direction: column;
 }
 
+.layout-stale-banner {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #5c3b00;
+  background: linear-gradient(90deg, #fff3cd, #ffe69c);
+  border-bottom: 1px solid #e0c040;
+}
+
 .canvas-tabs {
   display: flex;
   gap: 2px;

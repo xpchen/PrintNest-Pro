@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import { registerFileManagerIPC } from './fileManager';
 import { registerPdfExportIPC } from './pdfExport';
+import { registerExcelImportIPC } from './excelImport';
+import { registerLayoutIpc } from './layoutIpc';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -67,9 +69,19 @@ ipcMain.handle('dialog:saveFile', async (_event, defaultName: string, filterName
   return result.filePath;
 });
 
+ipcMain.handle('dialog:openExcel', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }],
+  });
+  return result.canceled ? [] : result.filePaths;
+});
+
 // Register file manager & PDF export IPC handlers
 registerFileManagerIPC();
 registerPdfExportIPC();
+registerExcelImportIPC();
+registerLayoutIpc();
 
 app.whenReady().then(createWindow);
 
