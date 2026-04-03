@@ -7,8 +7,9 @@
 import type { StateCreator } from 'zustand';
 import type { DataRecord, TemplateDefinition, TemplateInstance } from '../../../shared/types';
 import type { AppState, TemplateSlice } from '../types';
+import { instantiateTemplate } from '../../../shared/template/instantiate';
 
-export const createTemplateSlice: StateCreator<AppState, [], [], TemplateSlice> = (set) => ({
+export const createTemplateSlice: StateCreator<AppState, [], [], TemplateSlice> = (set, get) => ({
   dataRecords: [],
   templates: [],
   templateInstances: [],
@@ -107,4 +108,14 @@ export const createTemplateSlice: StateCreator<AppState, [], [], TemplateSlice> 
         return { ...t, elements: reordered, updatedAt: new Date().toISOString() };
       }),
     })),
+
+  instantiateAll: () => {
+    const s = get();
+    const allInstances: TemplateInstance[] = [];
+    for (const tpl of s.templates) {
+      const { instances } = instantiateTemplate(tpl, s.dataRecords);
+      allInstances.push(...instances);
+    }
+    set({ templateInstances: allInstances });
+  },
 });

@@ -171,6 +171,9 @@ export interface LayoutJobSlice {
   /* ── T02: patch-driven placement actions ── */
   togglePlacementHidden: (placementId: string) => void;
   duplicatePlacement: (placementId: string) => void;
+
+  /** 从模板实例送入排版 */
+  runAutoLayoutFromInstances: () => Promise<void>;
 }
 
 export interface TemplateSlice {
@@ -199,6 +202,9 @@ export interface TemplateSlice {
   updateElement: (templateId: string, elementId: string, patch: Partial<TemplateElement>) => void;
   removeElement: (templateId: string, elementId: string) => void;
   reorderElements: (templateId: string, orderedIds: string[]) => void;
+
+  /** 批量实例化：对当前模板 × dataRecords 调用引擎 */
+  instantiateAll: () => void;
 }
 
 export type AppState = ProjectSlice & SelectionSlice & CanvasViewSlice & LayoutJobSlice & UiShellSlice & TemplateSlice;

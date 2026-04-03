@@ -3,6 +3,7 @@ import type { LayoutResult, Placement } from '../../../shared/types';
 import { executeLayoutJob, withLayoutValidation } from '../../../shared/engine';
 import { buildLayoutSignature } from '../../../shared/layoutSignature';
 import { applyManualEditPatch } from '../../../shared/persistence/manualEditRuntime';
+import { instancesToPrintItems } from '../../../shared/template/instanceToLayoutAdapter';
 import { log } from '../../../shared/logger';
 import type { AppState, LayoutJobSlice } from '../types';
 
@@ -338,5 +339,27 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
     if (newOne) {
       set({ selectedIds: [newOne.id] });
     }
+  },
+
+  runAutoLayoutFromInstances: () => {
+    const s = get();
+    // 过滤掉 error 状态的实例
+    const readyInstances = s.templateInstances.filter((i) => i.status !== 'error');
+    if (readyInstances.length === 0) {
+      log.engine.warn('runAutoLayoutFromInstances: no ready instances');
+      return Promise.resolve();
+    }
+
+    const printItems = instancesToPrintItems(readyInstances, s.dataRecords, {
+      defaultSpacing: s.config.globalSpacing,
+      defaultBleed: s.config.globalBleed,
+      allowRotation: s.config.allowRotation,
+    });
+
+    // 将实例生成的 items 设为当前 items，然后跑 runAutoLayout
+    set({ items: printItems });
+
+    // 使用现有 runAutoLayout 流程
+    return get().runAutoLayout();
   },
 });
