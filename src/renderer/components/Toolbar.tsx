@@ -25,6 +25,8 @@ export const Toolbar: React.FC = () => {
   const {
     config, isComputing, zoom, result, activeCanvasIndex, items,
     addItem, setConfig, setCanvasSize, runAutoLayout, setZoom,
+    showGrid, showRuler, showSafeMargin, snapMm,
+    setShowGrid, setShowRuler, setShowSafeMargin, setSnapMm,
   } = useAppStore();
 
   // Modal state
@@ -158,8 +160,12 @@ export const Toolbar: React.FC = () => {
       await runAutoLayout();
       const r = useAppStore.getState().result;
       const u = r?.unplaced.length ?? 0;
+      const v = r?.validation;
+      const ve = v?.issues.filter((i) => i.severity === 'error').length ?? 0;
       if (u > 0) {
         showToast(`排版完成，${u} 件未排入（可放大画布或关闭单画布）`);
+      } else if (ve > 0) {
+        showToast(`排版完成，校验有 ${ve} 条错误（见底栏）`);
       } else {
         showToast('排版完成');
       }
@@ -353,6 +359,46 @@ export const Toolbar: React.FC = () => {
             value={config.globalBleed}
             onChange={(e) => setConfig({ globalBleed: Number(e.target.value) })}
           />
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }} title="校验时要求落位与画布边至少留出此距离">
+            安全边:
+          </span>
+          <input
+            className="input"
+            type="number"
+            min={0}
+            style={{ width: 40 }}
+            value={config.edgeSafeMm ?? 0}
+            onChange={(e) => setConfig({ edgeSafeMm: Math.max(0, Number(e.target.value) || 0) })}
+          />
+        </div>
+
+        <div className="toolbar-divider" />
+
+        <div className="toolbar-group" style={{ gap: 6 }}>
+          <label className="toolbar-check" style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
+            <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} />
+            网格
+          </label>
+          <label className="toolbar-check" style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
+            <input type="checkbox" checked={showRuler} onChange={(e) => setShowRuler(e.target.checked)} />
+            标尺
+          </label>
+          <label className="toolbar-check" style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }} title="按安全边参数显示内缩虚线">
+            <input type="checkbox" checked={showSafeMargin} onChange={(e) => setShowSafeMargin(e.target.checked)} />
+            安全边线
+          </label>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>吸附</span>
+          <select
+            className="select"
+            style={{ minWidth: 72, padding: '4px 6px', fontSize: 12 }}
+            value={snapMm}
+            onChange={(e) => setSnapMm(Number(e.target.value))}
+          >
+            <option value={1}>1 mm</option>
+            <option value={5}>5 mm</option>
+            <option value={10}>10 mm</option>
+            <option value={25}>25 mm</option>
+          </select>
         </div>
 
         <div style={{ flex: 1 }} />

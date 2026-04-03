@@ -11,6 +11,55 @@ import { buildLayoutSignature } from '../../shared/layoutSignature';
 // ==================== Image Cache ====================
 const imageCache = new Map<string, HTMLImageElement>();
 
+const GE = 1e-3;
+
+/** 拖拽中：检测越界与同画布碰撞（基于起始位置 + 当前位移） */
+function computeDragInvalid(
+  canvas: { placements: Placement[] },
+  dragOrig: { id: string; x: number; y: number }[],
+  dx: number,
+  dy: number,
+  snap: number,
+  cw: number,
+  ch: number,
+): Set<string> {
+  const bad = new Set<string>();
+  const dragIdSet = new Set(dragOrig.map((o) => o.id));
+  const tent = new Map<string, { x: number; y: number; w: number; h: number }>();
+  for (const o of dragOrig) {
+    const p = canvas.placements.find((pp) => pp.id === o.id);
+    if (!p) continue;
+    const x = Math.round((o.x + dx) / snap) * snap;
+    const y = Math.round((o.y + dy) / snap) * snap;
+    tent.set(o.id, { x, y, w: p.width, h: p.height });
+  }
+  for (const [id, r] of tent) {
+    if (r.x < -GE || r.y < -GE || r.x + r.w > cw + GE || r.y + r.h > ch + GE) bad.add(id);
+  }
+  const tids = [...tent.keys()];
+  for (let i = 0; i < tids.length; i++) {
+    for (let j = i + 1; j < tids.length; j++) {
+      const a = tent.get(tids[i])!;
+      const b = tent.get(tids[j])!;
+      const ix = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+      const iy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+      if (ix > GE && iy > GE) {
+        bad.add(tids[i]);
+        bad.add(tids[j]);
+      }
+    }
+  }
+  for (const [id, r] of tent) {
+    for (const p of canvas.placements) {
+      if (dragIdSet.has(p.id)) continue;
+      const ix = Math.min(r.x + r.w, p.x + p.width) - Math.max(r.x, p.x);
+      const iy = Math.min(r.y + r.h, p.y + p.height) - Math.max(r.y, p.y);
+      if (ix > GE && iy > GE) bad.add(id);
+    }
+  }
+  return bad;
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     if (imageCache.has(src)) { resolve(imageCache.get(src)!); return; }
@@ -26,8 +75,12 @@ export const CanvasArea: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const {
     result, config, items, activeCanvasIndex, selectedIds, zoom, layoutSourceSignature,
+    showGrid, showRuler, showSafeMargin,
     setActiveCanvas, setSelectedIds, toggleLock, updatePlacement, deleteSelected,
   } = useAppStore();
+
+  const [invalidDragTick, setInvalidDragTick] = useState(0);
+  const dragInvalidRef = useRef<Set<string>>(new Set());
 
   const layoutStale =
     !!result &&
@@ -57,6 +110,19 @@ export const CanvasArea: React.FC = () => {
   const currentCanvas = result?.canvases[activeCanvasIndex];
   const canvasW = config.canvas.width;
   const canvasH = config.canvas.height;
+  const edgeSafe = config.edgeSafeMm ?? 0;
+
+  const validationIssueIds = React.useMemo(() => {
+    const s = new Set<string>();
+    if (!result?.validation) return s;
+    for (const i of result.validation.issues) {
+      if (i.kind === 'overlap' || i.kind === 'out_of_bounds' || i.kind === 'spacing_violation') {
+        i.placementIds?.forEach((id) => s.add(id));
+      }
+      if (i.kind === 'safe_edge') i.placementIds?.forEach((id) => s.add(id));
+    }
+    return s;
+  }, [result?.validation]);
 
   /** Get item by printItemId */
   const getItem = useCallback(
@@ -95,6 +161,8 @@ export const CanvasArea: React.FC = () => {
 
   /** Draw canvas */
   const draw = useCallback(() => {
+    void imgLoadCount;
+    void invalidDragTick;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
@@ -121,14 +189,37 @@ export const CanvasArea: React.FC = () => {
     ctx.fillRect(0, 0, canvasW, canvasH);
     ctx.shadowColor = 'transparent';
 
-    // Grid (50mm)
-    ctx.strokeStyle = '#eee';
-    ctx.lineWidth = 0.5 / z;
-    for (let x = 50; x < canvasW; x += 50) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvasH); ctx.stroke();
+    // Grid
+    if (showGrid) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+      ctx.lineWidth = 0.35 / z;
+      for (let x = 10; x < canvasW; x += 10) {
+        if (x % 50 === 0) continue;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvasH); ctx.stroke();
+      }
+      for (let y = 10; y < canvasH; y += 10) {
+        if (y % 50 === 0) continue;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvasW, y); ctx.stroke();
+      }
+      ctx.strokeStyle = '#e8e8e8';
+      ctx.lineWidth = 0.55 / z;
+      for (let x = 50; x < canvasW; x += 50) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvasH); ctx.stroke();
+      }
+      for (let y = 50; y < canvasH; y += 50) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvasW, y); ctx.stroke();
+      }
     }
-    for (let y = 50; y < canvasH; y += 50) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvasW, y); ctx.stroke();
+
+    // 安全边（内缩区）
+    if (showSafeMargin && edgeSafe > 0 && edgeSafe * 2 < canvasW && edgeSafe * 2 < canvasH) {
+      ctx.save();
+      ctx.setLineDash([6 / z, 4 / z]);
+      ctx.strokeStyle = 'rgba(255, 107, 107, 0.45)';
+      ctx.lineWidth = 1 / z;
+      ctx.strokeRect(edgeSafe, edgeSafe, canvasW - 2 * edgeSafe, canvasH - 2 * edgeSafe);
+      ctx.setLineDash([]);
+      ctx.restore();
     }
 
     // Border
@@ -154,12 +245,27 @@ export const CanvasArea: React.FC = () => {
         const isSel = selectedIds.includes(p.id);
         const item = getItem(p.printItemId);
         const img = item?.imageSrc ? imageCache.get(item.imageSrc) : null;
+        const warnVal = validationIssueIds.has(p.id);
+        const dragBad = dragInvalidRef.current.has(p.id);
 
         ctx.save();
+        if (dragBad) {
+          ctx.fillStyle = 'rgba(255,80,80,0.22)';
+          ctx.fillRect(p.x, p.y, p.width, p.height);
+        } else if (warnVal) {
+          ctx.fillStyle = 'rgba(255,180,80,0.12)';
+          ctx.fillRect(p.x, p.y, p.width, p.height);
+        }
         if (img) {
           ctx.drawImage(img, p.x, p.y, p.width, p.height);
-          ctx.strokeStyle = isSel ? '#fff' : 'rgba(0,0,0,.3)';
-          ctx.lineWidth = isSel ? 2.5 / z : 0.5 / z;
+          ctx.strokeStyle = dragBad
+            ? '#ff4444'
+            : warnVal
+              ? '#ff9800'
+              : isSel
+                ? '#fff'
+                : 'rgba(0,0,0,.3)';
+          ctx.lineWidth = dragBad || warnVal ? 2 / z : isSel ? 2.5 / z : 0.5 / z;
           ctx.strokeRect(p.x, p.y, p.width, p.height);
           if (p.width * z > 52 && p.height * z > 36) {
             ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -178,8 +284,8 @@ export const CanvasArea: React.FC = () => {
           ctx.fillRect(p.x, p.y, p.width, p.height);
           ctx.fillStyle = color + '33';
           ctx.fillRect(p.x + 2 / z, p.y + 2 / z, p.width - 4 / z, p.height - 4 / z);
-          ctx.strokeStyle = isSel ? '#fff' : color;
-          ctx.lineWidth = isSel ? 2.5 / z : 1 / z;
+          ctx.strokeStyle = dragBad ? '#ff4444' : warnVal ? '#ff9800' : isSel ? '#fff' : color;
+          ctx.lineWidth = dragBad || warnVal ? 2 / z : isSel ? 2.5 / z : 1 / z;
           ctx.strokeRect(p.x, p.y, p.width, p.height);
         }
 
@@ -249,6 +355,44 @@ export const CanvasArea: React.FC = () => {
 
     ctx.restore();
 
+    // 标尺（屏幕像素坐标）
+    if (showRuler) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(180,180,200,0.85)';
+      ctx.fillStyle = 'rgba(160,160,180,0.95)';
+      ctx.font = '10px sans-serif';
+      ctx.lineWidth = 1;
+      const tickMajor = 14;
+      const tickMinor = 8;
+      for (let mm = 0; mm <= canvasW; mm += 10) {
+        const px = ox + mm * z;
+        const major = mm % 100 === 0;
+        ctx.beginPath();
+        ctx.moveTo(px, Math.max(0, oy - 1));
+        ctx.lineTo(px, oy - (major ? tickMajor : mm % 50 === 0 ? tickMinor + 3 : tickMinor));
+        ctx.stroke();
+        if (major && mm > 0) {
+          ctx.fillText(String(mm), px - 8, oy - tickMajor - 2);
+        }
+      }
+      for (let mm = 0; mm <= canvasH; mm += 10) {
+        const py = oy + mm * z;
+        const major = mm % 100 === 0;
+        ctx.beginPath();
+        ctx.moveTo(Math.max(0, ox - 1), py);
+        ctx.lineTo(ox - (major ? tickMajor : mm % 50 === 0 ? tickMinor + 3 : tickMinor), py);
+        ctx.stroke();
+        if (major && mm > 0) {
+          ctx.save();
+          ctx.translate(ox - tickMajor - 14, py + 3);
+          ctx.rotate(-Math.PI / 2);
+          ctx.fillText(String(mm), 0, 0);
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    }
+
     // Box selection rectangle (screen space)
     if (isBoxSelecting) {
       const bx1 = boxStartRef.current.x * z + ox;
@@ -265,7 +409,25 @@ export const CanvasArea: React.FC = () => {
       ctx.setLineDash([]);
       ctx.restore();
     }
-  }, [currentCanvas, canvasW, canvasH, zoom, offset, selectedIds, getItem, result, isBoxSelecting, boxEnd, imgLoadCount]);
+  }, [
+    currentCanvas,
+    canvasW,
+    canvasH,
+    zoom,
+    offset,
+    selectedIds,
+    getItem,
+    result,
+    isBoxSelecting,
+    boxEnd,
+    imgLoadCount,
+    showGrid,
+    showRuler,
+    showSafeMargin,
+    edgeSafe,
+    validationIssueIds,
+    invalidDragTick,
+  ]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -403,12 +565,20 @@ export const CanvasArea: React.FC = () => {
         const my = (e.clientY - rect.top - offset.y) / zoom;
         const dx = mx - dragStartRef.current.x;
         const dy = my - dragStartRef.current.y;
+        const snap = useAppStore.getState().snapMm;
         for (const orig of dragOrigRef.current) {
-          const newX = Math.max(0, Math.min(canvasW - (currentCanvas.placements.find((p) => p.id === orig.id)?.width ?? 0),
-            Math.round((orig.x + dx) / 5) * 5));
-          const newY = Math.max(0, Math.min(canvasH - (currentCanvas.placements.find((p) => p.id === orig.id)?.height ?? 0),
-            Math.round((orig.y + dy) / 5) * 5));
+          const p = currentCanvas.placements.find((pl) => pl.id === orig.id);
+          if (!p) continue;
+          const newX = Math.round((orig.x + dx) / snap) * snap;
+          const newY = Math.round((orig.y + dy) / snap) * snap;
           updatePlacement(orig.id, { x: newX, y: newY });
+        }
+        const st = useAppStore.getState();
+        const cur = st.result?.canvases[st.activeCanvasIndex];
+        if (cur) {
+          const bad = computeDragInvalid(cur, dragOrigRef.current, dx, dy, snap, canvasW, canvasH);
+          dragInvalidRef.current = bad;
+          setInvalidDragTick((t) => t + 1);
         }
       }
     },
@@ -425,6 +595,8 @@ export const CanvasArea: React.FC = () => {
     setIsPanning(false);
     setIsDragging(false);
     dragOrigRef.current = [];
+    dragInvalidRef.current = new Set();
+    setInvalidDragTick((t) => t + 1);
   }, [isBoxSelecting, boxEnd, boxSelect, setSelectedIds]);
 
   /** Right-click = toggle lock */

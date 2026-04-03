@@ -3,6 +3,7 @@
  * Worker 与主进程同步路径均应调用此函数。
  */
 import type { LayoutConfig, LayoutResult, Placement, PrintItem } from '../types';
+import { buildLayoutValidationReport } from './PlacementValidator';
 import { runLayout } from './LayoutScheduler';
 
 export interface LayoutJobInput {
@@ -12,5 +13,9 @@ export interface LayoutJobInput {
 }
 
 export function executeLayoutJob(input: LayoutJobInput): LayoutResult {
-  return runLayout(input.items, input.config, input.lockedPlacements);
+  const raw = runLayout(input.items, input.config, input.lockedPlacements);
+  return {
+    ...raw,
+    validation: buildLayoutValidationReport(raw, input.items, input.config),
+  };
 }

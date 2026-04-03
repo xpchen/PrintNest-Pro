@@ -27,6 +27,7 @@ export function buildLayoutSignature(items: PrintItem[], config: LayoutConfig): 
     config.globalBleed,
     config.allowRotation ? 1 : 0,
     config.singleCanvas ? 1 : 0,
+    config.edgeSafeMm ?? 0,
   ].join(':');
   return `${cfg}#${itemPart}`;
 }

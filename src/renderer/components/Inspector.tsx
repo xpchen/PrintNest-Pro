@@ -10,7 +10,7 @@ export const Inspector: React.FC = () => {
   const {
     result, selectedIds, items, activeCanvasIndex,
     toggleLock, batchLock, deleteSelected, setSelectedIds,
-    updatePlacement, updateItem, duplicateItem,
+    updatePlacement, updateItem, duplicateItem, alignSelected,
   } = useAppStore();
 
   const currentCanvas = result?.canvases[activeCanvasIndex];
@@ -83,6 +83,18 @@ export const Inspector: React.FC = () => {
                 全选
               </button>
             )}
+          </div>
+        </div>
+
+        <div className="inspector-section">
+          <div className="inspector-section-title">对齐（未锁定）</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button type="button" className="btn" onClick={() => { alignSelected('left'); showToast('已左对齐'); }}>左</button>
+            <button type="button" className="btn" onClick={() => { alignSelected('right'); showToast('已右对齐'); }}>右</button>
+            <button type="button" className="btn" onClick={() => { alignSelected('top'); showToast('已顶对齐'); }}>顶</button>
+            <button type="button" className="btn" onClick={() => { alignSelected('bottom'); showToast('已底对齐'); }}>底</button>
+            <button type="button" className="btn" onClick={() => { alignSelected('hcenter'); showToast('已水平居中'); }}>水平中</button>
+            <button type="button" className="btn" onClick={() => { alignSelected('vcenter'); showToast('已垂直居中'); }}>垂直中</button>
           </div>
         </div>
       </div>

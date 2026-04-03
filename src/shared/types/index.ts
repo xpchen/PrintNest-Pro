@@ -107,6 +107,8 @@ export interface LayoutResult {
   unplaced: LayoutUnit[];
   /** 排版耗时 (ms) */
   elapsedMs: number;
+  /** 几何与策略校验（自动排版后写入；手动改 placement 后由 store 刷新） */
+  validation?: LayoutValidationReport;
 }
 
 /** MaxRects 排版策略 */
@@ -138,6 +140,40 @@ export interface LayoutConfig {
    * 适合「一个 Excel 表 = 一张画布」等业务场景。
    */
   singleCanvas: boolean;
+  /**
+   * 成品区相对画布内缩的安全边（mm），用于校验落位是否过于贴边。
+   * 默认 0 表示仅校验不越出画布。
+   */
+  edgeSafeMm?: number;
+}
+
+/** 校验严重级别 */
+export type LayoutValidationSeverity = 'error' | 'warning';
+
+/** 校验问题类别 */
+export type LayoutValidationKind =
+  | 'out_of_bounds'
+  | 'overlap'
+  | 'spacing_violation'
+  | 'safe_edge'
+  | 'single_canvas_overflow'
+  | 'bleed_vs_canvas'
+  | 'high_utilization';
+
+/** 单条校验/风险提示 */
+export interface LayoutValidationIssue {
+  severity: LayoutValidationSeverity;
+  kind: LayoutValidationKind;
+  message: string;
+  canvasIndex: number;
+  placementIds?: string[];
+}
+
+/** 排版结果校验报告 */
+export interface LayoutValidationReport {
+  issues: LayoutValidationIssue[];
+  /** 无 error 级别问题 */
+  isValid: boolean;
 }
 
 export * from './domain';
