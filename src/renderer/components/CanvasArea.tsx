@@ -362,6 +362,20 @@ export const CanvasArea: React.FC = () => {
           ctx.strokeRect(p.x, p.y, p.width, p.height);
         }
 
+        // Hidden overlay — semi-transparent dashed border
+        if (p.hidden) {
+          ctx.globalAlpha = 0.2;
+          ctx.fillStyle = 'rgba(128,128,128,.3)';
+          ctx.fillRect(p.x, p.y, p.width, p.height);
+          ctx.globalAlpha = 0.5;
+          ctx.setLineDash([4 / z, 3 / z]);
+          ctx.strokeStyle = '#888';
+          ctx.lineWidth = 1.5 / z;
+          ctx.strokeRect(p.x, p.y, p.width, p.height);
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+        }
+
         // Locked overlay
         if (p.locked) {
           ctx.fillStyle = 'rgba(0,0,0,.5)';
@@ -597,6 +611,7 @@ export const CanvasArea: React.FC = () => {
       const my = (clientY - rect.top - panOffset.y) / zoom;
       for (let i = currentCanvas.placements.length - 1; i >= 0; i--) {
         const p = currentCanvas.placements[i];
+        if (p.hidden) continue; // hidden placements are not interactive
         if (mx >= p.x && mx <= p.x + p.width && my >= p.y && my <= p.y + p.height) return p;
       }
       return null;
@@ -611,7 +626,7 @@ export const CanvasArea: React.FC = () => {
       const left = Math.min(x1, x2), right = Math.max(x1, x2);
       const top = Math.min(y1, y2), bottom = Math.max(y1, y2);
       return currentCanvas.placements.filter(
-        (p) => p.x < right && p.x + p.width > left && p.y < bottom && p.y + p.height > top
+        (p) => !p.hidden && p.x < right && p.x + p.width > left && p.y < bottom && p.y + p.height > top
       );
     },
     [currentCanvas]

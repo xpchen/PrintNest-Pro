@@ -1,13 +1,25 @@
 /**
- * Excel 导入：内部单号 + 尺寸列（宽-高，单位厘米）→ mm 尺寸素材行
+ * Excel 导入 — 读取层 + 映射层 + 兼容组合入口
+ *
+ * 架构：
+ *   readExcelSheets(filePath)          → ParsedTable[]       (读取层：纯 IO)
+ *   mapTableToImportRows(table, cfg?)  → { rows, warnings }  (映射层：纯逻辑)
+ *   parseExcelImportFile(filePath)     → ExcelImportResult    (组合入口，保持旧签名)
+ *
+ * CSV 接入只需产出 ParsedTable，映射层可直接复用。
  */
 import readXlsxFile from 'read-excel-file/node';
 import * as fs from 'fs';
 import { ipcMain } from 'electron';
 import type { ExcelImportResult, ExcelImportRow } from '../shared/excelImport';
+import type { ParsedTable, ImportMappingConfig, ColumnProfile } from '../shared/importMapping';
 import { log } from '../shared/logger';
 
-function cellToString(v: unknown): string {
+/* ══════════════════════════════════════════════════════════
+ *  工具函数
+ * ══════════════════════════════════════════════════════════ */
+
+export function cellToString(v: unknown): string {
   if (v === null || v === undefined) return '';
   if (typeof v === 'number' && Number.isFinite(v)) {
     return Number.isInteger(v) ? String(v) : String(v);
@@ -25,15 +37,28 @@ function findColIndex(headers: string[], predicate: (h: string) => boolean): num
   return -1;
 }
 
-/** 「排版用尺寸」等列名也含「尺寸」，需排除，否则会读到非「宽-高」格式 */
+/** 「排版用尺寸」等列名也含「尺寸」，需排除 */
 function isSizeHeader(h: string): boolean {
   return h.includes('尺寸') && !h.includes('排版用');
+}
+
+/** 将「40-60」类字符串解析为厘米宽高；支持 en/em dash */
+export function parseSizeCm(raw: string): { w: number; h: number } | null {
+  const s = raw.replace(/[–—]/g, '-').trim();
+  const m = s.match(/^([\d.]+)\s*-\s*([\d.]+)/);
+  if (!m) return null;
+  const w = parseFloat(m[1]);
+  const h = parseFloat(m[2]);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return { w, h };
 }
 
 const HEADER_SCAN_MAX_ROW = 10;
 
 type ResolvedHeader = {
-  data: NonNullable<Awaited<ReturnType<typeof readXlsxFile>>[0]['data']>;
+  sheetIndex: number;
+  sheetName: string;
+  data: unknown[][];
   headerRowIndex: number;
   idxInternal: number;
   idxSize: number;
@@ -42,12 +67,12 @@ type ResolvedHeader = {
 
 /**
  * 多工作表 + 前若干行扫描：找到同时含「内部单号」「尺寸」表头的那一行。
- * 避免默认只读 sheets[0]（常为 Sheet2）而漏掉 Sheet1 上的表头。
  */
 function resolveHeaderRow(
   sheets: Awaited<ReturnType<typeof readXlsxFile>>,
 ): ResolvedHeader | null {
-  for (const { data } of sheets) {
+  for (let si = 0; si < sheets.length; si++) {
+    const { sheet: name, data } = sheets[si];
     if (!data.length) continue;
     const maxR = Math.min(HEADER_SCAN_MAX_ROW, data.length);
     for (let headerRowIndex = 0; headerRowIndex < maxR; headerRowIndex++) {
@@ -64,23 +89,152 @@ function resolveHeaderRow(
         headers,
         (h) => h.includes('数量') || h.includes('件数'),
       );
-      return { data, headerRowIndex, idxInternal, idxSize, idxQty };
+      return { sheetIndex: si, sheetName: name, data, headerRowIndex, idxInternal, idxSize, idxQty };
     }
   }
   return null;
 }
 
-/** 将「40-60」类字符串解析为厘米宽高；支持 en/em dash */
-function parseSizeCm(raw: string): { w: number; h: number } | null {
-  const s = raw.replace(/[–—]/g, '-').trim();
-  const m = s.match(/^([\d.]+)\s*-\s*([\d.]+)/);
-  if (!m) return null;
-  const w = parseFloat(m[1]);
-  const h = parseFloat(m[2]);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
-  return { w, h };
+/* ══════════════════════════════════════════════════════════
+ *  读取层 — readExcelSheets
+ * ══════════════════════════════════════════════════════════ */
+
+/**
+ * 读取 Excel 文件，将每个 sheet 转为 ParsedTable（表头以下为 dataRows）。
+ * 若未在前 HEADER_SCAN_MAX_ROW 行找到表头，则该 sheet 不产出。
+ */
+export async function readExcelSheets(filePath: string): Promise<ParsedTable[]> {
+  const sheets = await readXlsxFile(filePath);
+  const tables: ParsedTable[] = [];
+
+  for (const { sheet: name, data } of sheets) {
+    if (!data.length) continue;
+    const maxR = Math.min(HEADER_SCAN_MAX_ROW, data.length);
+
+    for (let hri = 0; hri < maxR; hri++) {
+      const headerRow = data[hri] ?? [];
+      const headers = headerRow.map((c) => cellToString(c));
+      // 只要有至少 2 列非空文本，就视为表头
+      const nonEmpty = headers.filter((h) => h.length > 0);
+      if (nonEmpty.length < 2) continue;
+
+      const SAMPLE_COUNT = 3;
+      const columns: ColumnProfile[] = headers.map((headerText, index) => {
+        const sampleValues: string[] = [];
+        for (let r = hri + 1; r < Math.min(hri + 1 + SAMPLE_COUNT, data.length); r++) {
+          sampleValues.push(cellToString(data[r]?.[index]));
+        }
+        return { index, headerText, sampleValues };
+      });
+
+      const dataRows: string[][] = [];
+      for (let r = hri + 1; r < data.length; r++) {
+        const row = data[r];
+        if (!row) continue;
+        dataRows.push(row.map((c) => cellToString(c)));
+      }
+
+      tables.push({
+        sheetName: name,
+        headerRowIndex: hri,
+        columns,
+        dataRows,
+      });
+      break; // 每个 sheet 最多产出一张表
+    }
+  }
+
+  log.import.info('readExcelSheets done', { filePath, tableCount: tables.length });
+  return tables;
 }
 
+/* ══════════════════════════════════════════════════════════
+ *  映射层 — mapTableToImportRows
+ * ══════════════════════════════════════════════════════════ */
+
+/**
+ * 根据 ImportMappingConfig 将 ParsedTable 映射为 ExcelImportRow[]。
+ * 无 mapping 或映射不含 sizeText+internalOrderNo 时返回空 rows + warning。
+ */
+export function mapTableToImportRows(
+  table: ParsedTable,
+  config: ImportMappingConfig,
+): { rows: ExcelImportRow[]; warnings: string[] } {
+  const rows: ExcelImportRow[] = [];
+  const warnings: string[] = [];
+
+  const findMapping = (field: string) =>
+    config.mappings.find((m) => m.field === field);
+
+  const nameMapping = findMapping('internalOrderNo');
+  const sizeMapping = findMapping('sizeText');
+  const qtyMapping = findMapping('quantity');
+
+  if (!nameMapping && !sizeMapping) {
+    warnings.push('映射配置中缺少 internalOrderNo 和 sizeText 字段');
+    return { rows, warnings };
+  }
+
+  const sizeUnit = config.sizeUnit ?? 'cm';
+  const toMm = sizeUnit === 'cm' ? 10 : 1;
+
+  for (let r = 0; r < table.dataRows.length; r++) {
+    const dataRow = table.dataRows[r];
+    const rowNum = table.headerRowIndex + 2 + r; // 1-based Excel 行号
+
+    const name = nameMapping ? (dataRow[nameMapping.columnIndex] ?? '').trim() : '';
+    const sizeStr = sizeMapping ? (dataRow[sizeMapping.columnIndex] ?? '').trim() : '';
+
+    if (!name && !sizeStr) continue;
+
+    if (!name) {
+      warnings.push(`第 ${rowNum} 行: 缺少内部单号`);
+      continue;
+    }
+    if (!sizeStr) {
+      warnings.push(`第 ${rowNum} 行 (${name}): 缺少尺寸`);
+      continue;
+    }
+
+    const parsed = parseSizeCm(sizeStr);
+    if (!parsed) {
+      warnings.push(`第 ${rowNum} 行 (${name}): 尺寸格式无效 (${sizeStr})`);
+      continue;
+    }
+
+    let quantity = 1;
+    if (qtyMapping) {
+      const qv = dataRow[qtyMapping.columnIndex] ?? '';
+      const n = parseFloat(qv);
+      if (Number.isFinite(n) && n > 0) {
+        quantity = Math.max(1, Math.floor(n));
+      }
+    }
+
+    rows.push({
+      name,
+      widthMm: parsed.w * toMm,
+      heightMm: parsed.h * toMm,
+      quantity,
+    });
+  }
+
+  if (rows.length === 0 && warnings.length === 0) {
+    warnings.push('没有数据行');
+  }
+
+  log.import.info('mapTableToImportRows done', { rows: rows.length, warnings: warnings.length });
+  return { rows, warnings };
+}
+
+/* ══════════════════════════════════════════════════════════
+ *  组合入口 — parseExcelImportFile（保持旧签名兼容）
+ * ══════════════════════════════════════════════════════════ */
+
+/**
+ * 兼容入口：读取 Excel → 自动识别表头 → 固定列逻辑解析 → ExcelImportResult。
+ * 若未来提供 ImportMappingConfig，可改走 readExcelSheets + mapTableToImportRows。
+ */
 export async function parseExcelImportFile(filePath: string): Promise<ExcelImportResult> {
   const warnings: string[] = [];
   const rows: ExcelImportRow[] = [];

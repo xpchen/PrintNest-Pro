@@ -11,6 +11,7 @@ import { createSelectionSlice } from './selectionSlice';
 import { createCanvasViewSlice } from './canvasViewSlice';
 import { createLayoutJobSlice } from './layoutJobSlice';
 import { createUiShellSlice } from './uiShellSlice';
+import { createTemplateSlice } from './templateSlice';
 import { createLayoutConfig, createPrintItem, createLayoutResult } from '../../../__tests__/factories';
 
 function makeStore() {
@@ -20,6 +21,7 @@ function makeStore() {
     ...createCanvasViewSlice(...args),
     ...createLayoutJobSlice(...args),
     ...createUiShellSlice(...args),
+    ...createTemplateSlice(...args),
   }));
 }
 

@@ -113,4 +113,42 @@ describe('buildLayoutValidationReport', () => {
     expect(r.isValid).toBe(true);
     expect(r.issues.filter((i) => i.severity === 'error')).toHaveLength(0);
   });
+
+  it('warns about hidden placements', () => {
+    const items = [item('a')];
+    const result = makeResult([{ ...p('p1', 'a', 0, 0, 50, 50), hidden: true }]);
+    const r = buildLayoutValidationReport(result, items, baseConfig());
+    expect(r.issues.some((i) => i.kind === 'hidden_count')).toBe(true);
+    const issue = r.issues.find((i) => i.kind === 'hidden_count')!;
+    expect(issue.severity).toBe('warning');
+    expect(issue.placementIds).toContain('p1');
+  });
+
+  it('warns about missing printItemId reference', () => {
+    const items = [item('a')];
+    // p2 references 'nonexistent' which is not in items
+    const result = makeResult([
+      p('p1', 'a', 0, 0, 50, 50),
+      p('p2', 'nonexistent', 100, 0, 50, 50),
+    ]);
+    const r = buildLayoutValidationReport(result, items, baseConfig());
+    expect(r.issues.some((i) => i.kind === 'missing_item_ref')).toBe(true);
+    const issue = r.issues.find((i) => i.kind === 'missing_item_ref')!;
+    expect(issue.placementIds).toContain('p2');
+  });
+
+  it('does not warn about hidden when none hidden', () => {
+    const items = [item('a')];
+    const result = makeResult([p('p1', 'a', 0, 0, 50, 50)]);
+    const r = buildLayoutValidationReport(result, items, baseConfig());
+    expect(r.issues.some((i) => i.kind === 'hidden_count')).toBe(false);
+  });
+
+  it('detects safe edge violation', () => {
+    const items = [item('a')];
+    const cfg = { ...baseConfig(), edgeSafeMm: 10 };
+    const result = makeResult([p('p1', 'a', 2, 2, 50, 50)]);
+    const r = buildLayoutValidationReport(result, items, cfg);
+    expect(r.issues.some((i) => i.kind === 'safe_edge')).toBe(true);
+  });
 });

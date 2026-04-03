@@ -79,6 +79,8 @@ export interface Placement {
   rotated: boolean;
   /** 是否锁定 (不参与重排) */
   locked: boolean;
+  /** 是否隐藏（手工编辑产生，不参与导出/预览） */
+  hidden?: boolean;
 }
 
 /** 画布定义 */
@@ -160,7 +162,9 @@ export type LayoutValidationKind =
   | 'safe_edge'
   | 'single_canvas_overflow'
   | 'bleed_vs_canvas'
-  | 'high_utilization';
+  | 'high_utilization'
+  | 'hidden_count'
+  | 'missing_item_ref';
 
 /** 单条校验/风险提示 */
 export interface LayoutValidationIssue {
@@ -179,3 +183,4 @@ export interface LayoutValidationReport {
 }
 
 export * from './domain';
+export * from './template';

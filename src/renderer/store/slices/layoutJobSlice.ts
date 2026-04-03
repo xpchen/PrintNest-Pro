@@ -2,6 +2,8 @@ import type { StateCreator } from 'zustand';
 import type { LayoutResult, Placement } from '../../../shared/types';
 import { executeLayoutJob, withLayoutValidation } from '../../../shared/engine';
 import { buildLayoutSignature } from '../../../shared/layoutSignature';
+import { applyManualEditPatch } from '../../../shared/persistence/manualEditRuntime';
+import { log } from '../../../shared/logger';
 import type { AppState, LayoutJobSlice } from '../types';
 
 function findPlacementGlobal(s: AppState, placementId: string): Placement | undefined {
@@ -72,6 +74,7 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
         selectedIds: [],
         layoutSourceSignature,
         lastLayoutRunId: layoutRunId !== undefined ? layoutRunId : get().lastLayoutRunId,
+        draftSourceRunId: null,
         manualEdits: [],
         manualEditNextRevision: 1,
       });
@@ -270,5 +273,70 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
       };
       return { result: withLayoutValidation(next, s.items, s.config) };
     });
+  },
+
+  /* ── T02: patch-driven placement actions ── */
+
+  togglePlacementHidden: (placementId) => {
+    const s = get();
+    if (!s.result) return;
+    const prev = findPlacementGlobal(s, placementId);
+    if (!prev) {
+      log.engine.warn('togglePlacementHidden: placement not found', { placementId });
+      return;
+    }
+
+    const newHidden = !prev.hidden;
+    const patch = {
+      sourceRunId: s.lastLayoutRunId,
+      placementId,
+      op: 'hide' as const,
+      before: { hidden: !!prev.hidden },
+      after: { hidden: newHidden },
+    };
+
+    const applied = applyManualEditPatch(s.result, {
+      ...patch,
+      revision: s.manualEditNextRevision,
+      updatedAt: new Date().toISOString(),
+    });
+    const validated = withLayoutValidation(applied.result, s.items, s.config);
+    set({ result: validated });
+    get().appendManualEdit(patch);
+  },
+
+  duplicatePlacement: (placementId) => {
+    const s = get();
+    if (!s.result) return;
+    const prev = findPlacementGlobal(s, placementId);
+    if (!prev) {
+      log.engine.warn('duplicatePlacement: placement not found', { placementId });
+      return;
+    }
+
+    const patch = {
+      sourceRunId: s.lastLayoutRunId,
+      placementId,
+      op: 'duplicate' as const,
+      delta: { dx: 10, dy: 10 },
+    };
+
+    const applied = applyManualEditPatch(s.result, {
+      ...patch,
+      revision: s.manualEditNextRevision,
+      updatedAt: new Date().toISOString(),
+    });
+    const validated = withLayoutValidation(applied.result, s.items, s.config);
+    set({ result: validated });
+    get().appendManualEdit(patch);
+
+    // 选中新复制的 placement
+    const newPlacements = applied.result.canvases.flatMap((c) => c.placements);
+    const origPlacements = s.result.canvases.flatMap((c) => c.placements);
+    const origIds = new Set(origPlacements.map((p) => p.id));
+    const newOne = newPlacements.find((p) => !origIds.has(p.id));
+    if (newOne) {
+      set({ selectedIds: [newOne.id] });
+    }
   },
 });

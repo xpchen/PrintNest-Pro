@@ -1,4 +1,4 @@
-import type { PrintItem, Placement, LayoutConfig, LayoutResult } from '../../shared/types';
+import type { PrintItem, Placement, LayoutConfig, LayoutResult, DataRecord, TemplateDefinition, TemplateInstance } from '../../shared/types';
 import { PackingStrategy } from '../../shared/types';
 import type { ManualEditPatch } from '../../shared/persistence/manualEdits';
 import type { DisplayLengthUnit } from '../utils/lengthDisplay';
@@ -13,6 +13,8 @@ export interface ProjectSlice {
   projectName: string;
   currentProjectId: string;
   layoutSourceSignature: string | null;
+  /** 当前草稿来源的历史 run id（恢复后设置，新排版后清除） */
+  draftSourceRunId: string | null;
   setProjectName: (name: string) => void;
   hydrateFromEditorState: (payload: {
     projectName: string;
@@ -161,9 +163,23 @@ export interface LayoutJobSlice {
   deleteSelected: () => void;
   updatePlacement: (placementId: string, patch: Partial<Placement>) => void;
   alignSelected: (mode: AlignMode) => void;
+
+  /* ── T02: patch-driven placement actions ── */
+  togglePlacementHidden: (placementId: string) => void;
+  duplicatePlacement: (placementId: string) => void;
 }
 
-export type AppState = ProjectSlice & SelectionSlice & CanvasViewSlice & LayoutJobSlice & UiShellSlice;
+export interface TemplateSlice {
+  dataRecords: DataRecord[];
+  templates: TemplateDefinition[];
+  templateInstances: TemplateInstance[];
+  setDataRecords: (records: DataRecord[]) => void;
+  addTemplate: (t: TemplateDefinition) => void;
+  removeTemplate: (id: string) => void;
+  setTemplateInstances: (instances: TemplateInstance[]) => void;
+}
+
+export type AppState = ProjectSlice & SelectionSlice & CanvasViewSlice & LayoutJobSlice & UiShellSlice & TemplateSlice;
 
 export const defaultConfig = (): LayoutConfig => ({
   canvas: { width: 1000, height: 1500 },

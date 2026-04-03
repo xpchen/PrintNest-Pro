@@ -12,6 +12,7 @@ import { createSelectionSlice } from './selectionSlice';
 import { createCanvasViewSlice } from './canvasViewSlice';
 import { createLayoutJobSlice } from './layoutJobSlice';
 import { createUiShellSlice } from './uiShellSlice';
+import { createTemplateSlice } from './templateSlice';
 import {
   createPrintItem,
   createLayoutConfig,
@@ -27,6 +28,7 @@ function makeStore(overrides?: Partial<AppState>) {
     ...createCanvasViewSlice(...args),
     ...createLayoutJobSlice(...args),
     ...createUiShellSlice(...args),
+    ...createTemplateSlice(...args),
   }));
   if (overrides) store.setState(overrides);
   return store;

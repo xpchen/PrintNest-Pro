@@ -1,5 +1,5 @@
 /**
- * 全局 Zustand Store — 由 project / selection / 画布视图 / 排版任务 五切片组合
+ * 全局 Zustand Store — 由 project / selection / 画布视图 / 排版任务 / UI shell / 模板 六切片组合
  * + zundo temporal middleware 提供 undo/redo
  */
 import { create } from 'zustand';
@@ -10,6 +10,7 @@ import { createSelectionSlice } from './slices/selectionSlice';
 import { createCanvasViewSlice } from './slices/canvasViewSlice';
 import { createLayoutJobSlice } from './slices/layoutJobSlice';
 import { createUiShellSlice } from './slices/uiShellSlice';
+import { createTemplateSlice } from './slices/templateSlice';
 
 export const useAppStore = create<AppState>()(
   temporal(
@@ -19,6 +20,7 @@ export const useAppStore = create<AppState>()(
       ...createCanvasViewSlice(...args),
       ...createLayoutJobSlice(...args),
       ...createUiShellSlice(...args),
+      ...createTemplateSlice(...args),
     }),
     {
       // 只追踪业务状态，排除 UI/视图状态

@@ -20,6 +20,7 @@ export const RunPanel: React.FC = () => {
   const items = useAppStore((s) => s.items);
   const restoreRunAsNewDraft = useAppStore((s) => s.restoreRunAsNewDraft);
   const lastLayoutRunId = useAppStore((s) => s.lastLayoutRunId);
+  const draftSourceRunId = useAppStore((s) => s.draftSourceRunId);
   const isComputing = useAppStore((s) => s.isComputing);
   const wasComputingRef = useRef(isComputing);
 
@@ -84,11 +85,11 @@ export const RunPanel: React.FC = () => {
 
   const restore = useCallback(
     async (runId: string) => {
-      if (
-        !window.confirm(
-          '将所选 run 恢复为新的当前草稿：会替换当前排版结果与配置快照，并清空手工编辑记录。未自动保存的修改仍可通过自动保存/历史文件找回。确定继续？',
-        )
-      ) {
+      const editsCount = useAppStore.getState().manualEdits.length;
+      const msg = editsCount > 0
+        ? `当前有 ${editsCount} 条未保存的手工编辑，恢复后将被清空。确定继续？`
+        : '将所选 run 恢复为新的当前草稿：会替换当前排版结果与配置快照。确定继续？';
+      if (!window.confirm(msg)) {
         return;
       }
       const api = window.electronAPI;
@@ -144,6 +145,7 @@ export const RunPanel: React.FC = () => {
               <div className="run-panel__title">
                 <code className="run-panel__id">{r.id.slice(0, 8)}…</code>
                 {r.id === lastLayoutRunId && <span className="run-panel__badge">当前会话</span>}
+                {r.id === draftSourceRunId && r.id !== lastLayoutRunId && <span className="run-panel__badge" style={{ background: 'var(--accent)' }}>草稿来源</span>}
               </div>
               <div className="run-panel__meta">
                 {(r.utilization * 100).toFixed(1)}% 利用 · {r.placement_count ?? '—'} 落位 · {r.canvas_count}{' '}

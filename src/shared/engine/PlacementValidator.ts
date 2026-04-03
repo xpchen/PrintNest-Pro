@@ -173,6 +173,39 @@ export function buildLayoutValidationReport(
     });
   }
 
+  // hidden 对象统计
+  const hiddenIds: string[] = [];
+  for (const canvas of result.canvases) {
+    for (const p of canvas.placements) {
+      if (p.hidden) hiddenIds.push(p.id);
+    }
+  }
+  if (hiddenIds.length > 0) {
+    issues.push({
+      severity: 'warning',
+      kind: 'hidden_count',
+      message: `${hiddenIds.length} 个元素已隐藏，不会参与导出`,
+      canvasIndex: 0,
+      placementIds: hiddenIds,
+    });
+  }
+
+  // 缺失 printItemId 引用检测
+  const itemIds = new Set(items.map((i) => i.id));
+  for (const canvas of result.canvases) {
+    for (const p of canvas.placements) {
+      if (!itemIds.has(p.printItemId)) {
+        issues.push({
+          severity: 'warning',
+          kind: 'missing_item_ref',
+          message: `落位 ${p.id} 引用的素材 ${p.printItemId} 不存在`,
+          canvasIndex: canvas.index,
+          placementIds: [p.id],
+        });
+      }
+    }
+  }
+
   const errors = issues.filter((x) => x.severity === 'error');
   return {
     issues,

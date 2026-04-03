@@ -16,10 +16,12 @@ export const StatusBar: React.FC = () => {
     editorWorkMode,
     displayUnit,
     saveStatus,
+    draftSourceRunId,
   } = useAppStore();
 
   const utilization = result?.totalUtilization ?? 0;
   const unplacedN = result?.unplaced?.length ?? 0;
+  const hiddenN = result?.canvases.reduce((n, c) => n + c.placements.filter((p) => p.hidden).length, 0) ?? 0;
   const val = result?.validation;
   const errN = val?.issues.filter((i) => i.severity === 'error').length ?? 0;
   const warnN = val?.issues.filter((i) => i.severity !== 'error').length ?? 0;
@@ -53,6 +55,11 @@ export const StatusBar: React.FC = () => {
           未排入 {unplacedN}
         </div>
       )}
+      {result && hiddenN > 0 && (
+        <div className="statusbar-item" style={{ color: 'var(--text-secondary)' }} title="已隐藏的元素不参与导出">
+          隐藏 {hiddenN}
+        </div>
+      )}
       {result && val && (errN > 0 || warnN > 0) && (
         <div className="statusbar-item" title={valTitle} style={{ cursor: valTitle ? 'help' : undefined }}>
           校验:
@@ -65,6 +72,11 @@ export const StatusBar: React.FC = () => {
       {result && val && val.isValid && errN === 0 && warnN === 0 && (
         <div className="statusbar-item" style={{ color: 'var(--success)' }}>
           校验通过
+        </div>
+      )}
+      {draftSourceRunId && (
+        <div className="statusbar-item" style={{ color: 'var(--accent)', fontSize: 11 }} title={`草稿来源 Run: ${draftSourceRunId}`}>
+          草稿来源: {draftSourceRunId.slice(0, 8)}
         </div>
       )}
       <div style={{ flex: 1 }} />

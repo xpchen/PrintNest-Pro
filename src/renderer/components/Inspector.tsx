@@ -14,6 +14,8 @@ export const Inspector: React.FC = () => {
     updatePlacement, updateItem, duplicateItem, alignSelected,
     focusRectInCanvas,
     displayUnit,
+    togglePlacementHidden,
+    duplicatePlacement,
   } = useAppStore();
 
   const currentCanvas = result?.canvases[activeCanvasIndex];
@@ -75,6 +77,9 @@ export const Inspector: React.FC = () => {
             <button className="btn" onClick={() => { batchLock(selectedIds, false); showToast(`已解锁 ${selCount} 个`); }}>
               🔓 全部解锁
             </button>
+            <button className="btn" onClick={() => { selPlacements.forEach((p) => togglePlacementHidden(p.id)); showToast(`已切换 ${selCount} 个隐藏状态`); }}>
+              🙈 切换隐藏
+            </button>
             <button className="btn btn-danger" onClick={deleteSelected}>
               🗑 删除全部 ({selCount})
             </button>
@@ -133,6 +138,12 @@ export const Inspector: React.FC = () => {
             {sel.locked ? '🔒 已锁定' : '已解锁'}
           </span>
         </div>
+        {sel.hidden && (
+          <div className="inspector-row">
+            <span className="inspector-label" style={{ width: 50 }}>可见</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>已隐藏</span>
+          </div>
+        )}
       </div>
 
       {/* Position - editable */}
@@ -245,8 +256,14 @@ export const Inspector: React.FC = () => {
           <button className="btn" onClick={() => { toggleLock(sel.id); showToast(sel.locked ? '已解锁' : '已锁定'); }}>
             {sel.locked ? '🔓 解锁' : '🔒 锁定'}
           </button>
-          <button className="btn" onClick={() => { duplicateItem(sel.printItemId); showToast('已复制素材'); }}>
+          <button className="btn" onClick={() => { togglePlacementHidden(sel.id); showToast(sel.hidden ? '已显示' : '已隐藏'); }}>
+            {sel.hidden ? '👁 显示' : '🙈 隐藏'}
+          </button>
+          <button className="btn" onClick={() => { duplicatePlacement(sel.id); showToast('已复制 placement'); }}>
             📋 复制
+          </button>
+          <button className="btn" onClick={() => { duplicateItem(sel.printItemId); showToast('已复制素材'); }}>
+            📋 复制素材
           </button>
           <button className="btn btn-danger" onClick={deleteSelected}>
             🗑 删除
