@@ -10,6 +10,9 @@
 import { ipcMain } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { LayoutConfig } from '../shared/types';
+import { getOrOpenProjectDb } from './db/projectDb';
+import { getProjectDirectory } from './projectPaths';
 
 // PDFKit 类型（动态 require 以兼容打包）
 let PDFDocument: any;
@@ -31,6 +34,7 @@ interface ExportPlacement {
   rotated: boolean;
   imagePath?: string;  // 本地文件路径
   imageBase64?: string; // base64 data URL
+  assetId?: string;
   color: string;
   name: string;
 }
@@ -46,6 +50,8 @@ interface PdfExportOptions {
   bleed: number;         // mm
   showCropMarks: boolean;
   outputPath: string;
+  /** 提供时优先用受管素材路径导出（双语义之「当前编辑态」） */
+  projectId?: string;
 }
 
 /**
@@ -92,6 +98,17 @@ function base64ToBuffer(dataUrl: string): Buffer {
   return Buffer.from(base64Data, 'base64');
 }
 
+function resolveManagedAssetPath(projectId: string, assetId: string): string | undefined {
+  const db = getOrOpenProjectDb(projectId);
+  if (!db) return undefined;
+  const row = db
+    .prepare('SELECT managed_relative_path FROM assets WHERE id = ?')
+    .get(assetId) as { managed_relative_path: string } | undefined;
+  if (!row) return undefined;
+  const abs = path.join(getProjectDirectory(projectId), row.managed_relative_path);
+  return fs.existsSync(abs) ? abs : undefined;
+}
+
 /**
  * 导出 PDF
  */
@@ -100,7 +117,7 @@ async function exportPdf(options: PdfExportOptions): Promise<void> {
     throw new Error('PDFKit 未安装。请运行: npm install pdfkit');
   }
 
-  const { canvasWidth, canvasHeight, canvases, bleed, showCropMarks, outputPath } = options;
+  const { canvasWidth, canvasHeight, canvases, bleed, showCropMarks, outputPath, projectId } = options;
   const bleedPt = bleed * MM_TO_PT;
 
   // 页面尺寸 = 画布尺寸 + 四边出血
@@ -139,8 +156,13 @@ async function exportPdf(options: PdfExportOptions): Promise<void> {
       // 尝试嵌入图片
       let imageDrawn = false;
       try {
+        const managedPath =
+          projectId && p.assetId ? resolveManagedAssetPath(projectId, p.assetId) : undefined;
         if (p.imagePath && fs.existsSync(p.imagePath)) {
           doc.image(p.imagePath, px, py, { width: pw, height: ph });
+          imageDrawn = true;
+        } else if (managedPath) {
+          doc.image(managedPath, px, py, { width: pw, height: ph });
           imageDrawn = true;
         } else if (p.imageBase64) {
           const buf = base64ToBuffer(p.imageBase64);
@@ -183,12 +205,95 @@ async function exportPdf(options: PdfExportOptions): Promise<void> {
   });
 }
 
+export type HistoricalPdfPayload = {
+  projectId: string;
+  layoutRunId: string;
+  outputPath: string;
+};
+
+/** 按历史 layout_run + run_placements + artwork_items 导出（双语义：历史 run） */
+async function exportPdfFromHistoricalRun(payload: HistoricalPdfPayload): Promise<void> {
+  const db = getOrOpenProjectDb(payload.projectId);
+  if (!db) throw new Error('无法打开项目数据库');
+  const row = db
+    .prepare(`SELECT config_snapshot_json FROM layout_runs WHERE id = ?`)
+    .get(payload.layoutRunId) as { config_snapshot_json: string } | undefined;
+  if (!row) throw new Error('未找到 layout run');
+  const config = JSON.parse(row.config_snapshot_json) as LayoutConfig;
+
+  type RP = {
+    print_item_id: string;
+    canvas_index: number;
+    x_mm: number;
+    y_mm: number;
+    width_mm: number;
+    height_mm: number;
+    rotated: number;
+  };
+  let pr: RP[] = [];
+  try {
+    pr = db.prepare(`SELECT print_item_id, canvas_index, x_mm, y_mm, width_mm, height_mm, rotated FROM run_placements WHERE run_id = ?`).all(
+      payload.layoutRunId,
+    ) as RP[];
+  } catch {
+    throw new Error('run_placements 表不可用，请先完成数据库迁移');
+  }
+
+  const byCanvas = new Map<number, RP[]>();
+  for (const r of pr) {
+    const arr = byCanvas.get(r.canvas_index) ?? [];
+    arr.push(r);
+    byCanvas.set(r.canvas_index, arr);
+  }
+  const keys = [...byCanvas.keys()].sort((a, b) => a - b);
+  if (keys.length === 0) {
+    throw new Error('该 Run 无结构化 placements，请确认已执行数据库迁移并排过版');
+  }
+  const canvases: ExportCanvas[] = keys.map((k) => ({
+    placements: (byCanvas.get(k) ?? []).map((r) => {
+      const art = db
+        .prepare(`SELECT name, color, asset_id FROM artwork_items WHERE id = ?`)
+        .get(r.print_item_id) as { name: string; color: string | null; asset_id: string | null } | undefined;
+      const ep: ExportPlacement = {
+        x: r.x_mm,
+        y: r.y_mm,
+        width: r.width_mm,
+        height: r.height_mm,
+        rotated: Boolean(r.rotated),
+        color: art?.color || '#ccc',
+        name: art?.name ?? r.print_item_id,
+        assetId: art?.asset_id ?? undefined,
+      };
+      return ep;
+    }),
+  }));
+
+  await exportPdf({
+    canvasWidth: config.canvas.width,
+    canvasHeight: config.canvas.height,
+    canvases,
+    bleed: config.globalBleed,
+    showCropMarks: true,
+    outputPath: payload.outputPath,
+    projectId: payload.projectId,
+  });
+}
+
 /** 注册 PDF 导出 IPC */
 export function registerPdfExportIPC(): void {
   ipcMain.handle('pdf:export', async (_event, options: PdfExportOptions) => {
     try {
       await exportPdf(options);
       return { success: true, path: options.outputPath };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('pdf:exportHistoricalRun', async (_event, payload: HistoricalPdfPayload) => {
+    try {
+      await exportPdfFromHistoricalRun(payload);
+      return { success: true, path: payload.outputPath };
     } catch (err: any) {
       return { success: false, error: err.message };
     }

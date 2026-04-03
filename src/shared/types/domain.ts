@@ -60,7 +60,11 @@ export interface DomainCanvasProfile {
   sheetType: 'sheet' | 'roll';
 }
 
-/** 一次排版运行记录（与 SQLite layout_runs 对应，可扩展） */
+/**
+ * 一次排版运行记录（与 SQLite layout_runs 对应）。
+ * 选项 A：一项目一库，库文件即项目边界；持久化层不写全局 project_id 列，
+ * `projectId` 仅作进程内/跨模块逻辑字段。
+ */
 export interface DomainLayoutRun {
   id: string;
   projectId: string;
@@ -74,7 +78,9 @@ export interface DomainLayoutRun {
   errorsJson?: string;
 }
 
-/** 落位结果（持久化视角） */
+/**
+ * 落位结果（持久化视角）；SQLite 表 `run_placements` 与之对应（run_id ↔ layoutRunId）。
+ */
 export interface DomainPlacement {
   id: string;
   layoutRunId: string;

@@ -13,8 +13,10 @@ export interface PrintItem {
   height: number;
   /** 需要排版的数量 */
   quantity: number;
-  /** 素材图片路径或 base64 */
+  /** 素材图片路径或 base64（UI 预览；持久化以 assetId + 受管文件为准） */
   imageSrc: string;
+  /** 关联 assets 表 id（有则主进程从磁盘 hydrate 预览） */
+  assetId?: string;
   /** 分组标识 */
   group?: string;
   /** 优先级 (数值越大越优先) */

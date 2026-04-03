@@ -7,12 +7,20 @@ import type { AppState, LayoutJobSlice } from '../types';
 export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice> = (set, get) => ({
   result: null,
   isComputing: false,
+  lastLayoutRunId: null,
+  layoutProgress: 0,
+
+  cancelLayoutJob: () => {
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+    void api?.cancelLayoutJob?.();
+    set({ isComputing: false, layoutProgress: 0 });
+  },
 
   runAutoLayout: () => {
-    set({ isComputing: true });
+    set({ isComputing: true, layoutProgress: 0 });
     const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
 
-    const compute = async (): Promise<LayoutResult> => {
+    const compute = async (): Promise<{ result: LayoutResult; layoutRunId?: string }> => {
       const { items, config, result: prevResult, currentProjectId } = get();
       const locked: Placement[] = [];
       if (prevResult) {
@@ -31,38 +39,48 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
       if (api?.runLayoutJob) {
         return api.runLayoutJob(payload);
       }
-      return executeLayoutJob({
+      const result = executeLayoutJob({
         items,
         config,
         lockedPlacements: locked.length > 0 ? locked : undefined,
       });
+      return { result };
     };
 
-    const finish = (result: LayoutResult) => {
+    const finish = (result: LayoutResult, layoutRunId?: string) => {
       const { items, config } = get();
       const layoutSourceSignature = buildLayoutSignature(items, config);
       set({
         result,
         isComputing: false,
+        layoutProgress: 0,
         activeCanvasIndex: 0,
         selectedIds: [],
         layoutSourceSignature,
+        lastLayoutRunId: layoutRunId !== undefined ? layoutRunId : get().lastLayoutRunId,
       });
     };
 
     return new Promise<void>((resolve, reject) => {
-      const run = () => {
-        compute()
-          .then((result) => {
-            finish(result);
-            resolve();
-          })
-          .catch((e) => {
-            set({ isComputing: false });
-            reject(e);
-          });
+      const run = async () => {
+        const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+        const stopProgress = api?.onLayoutProgress?.((p) => {
+          set({ layoutProgress: p.pct });
+        });
+        try {
+          const { result, layoutRunId } = await compute();
+          finish(result, layoutRunId);
+          resolve();
+        } catch (e) {
+          set({ isComputing: false, layoutProgress: 0 });
+          reject(e);
+        } finally {
+          stopProgress?.();
+        }
       };
-      requestAnimationFrame(run);
+      requestAnimationFrame(() => {
+        void run();
+      });
     });
   },
 

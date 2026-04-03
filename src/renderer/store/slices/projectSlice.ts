@@ -3,12 +3,54 @@ import type { PrintItem } from '../../../shared/types';
 import type { AppState, ProjectSlice } from '../types';
 import { defaultConfig } from '../types';
 import { genId, nextColor } from '../itemUtils';
+import { emptyEditorState } from '../../../shared/persistence/editorState';
+
+function initialUiPhase(): 'home' | 'editor' {
+  if (typeof window === 'undefined') return 'editor';
+  return window.electronAPI ? 'home' : 'editor';
+}
 
 export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = (set) => ({
   items: [],
   config: defaultConfig(),
+  projectName: 'default',
   currentProjectId: 'default',
   layoutSourceSignature: null,
+  uiPhase: initialUiPhase(),
+
+  setUiPhase: (phase) => set({ uiPhase: phase }),
+
+  resetWorkspaceToEmpty: () => {
+    const blank = emptyEditorState('default');
+    set({
+      ...blank,
+      currentProjectId: 'default',
+      projectName: 'default',
+      selectedIds: [],
+      activeCanvasIndex: 0,
+      uiPhase: 'home',
+      isComputing: false,
+      layoutProgress: 0,
+      lastLayoutRunId: null,
+    });
+  },
+
+  setProjectName: (name) => set({ projectName: name || '未命名项目' }),
+
+  hydrateFromEditorState: (payload) =>
+    set({
+      projectName: payload.projectName,
+      items: payload.items,
+      config: payload.config,
+      result: payload.result,
+      layoutSourceSignature: payload.layoutSourceSignature,
+      selectedIds: [],
+      activeCanvasIndex: 0,
+      uiPhase: 'editor',
+      lastLayoutRunId: null,
+      layoutProgress: 0,
+      isComputing: false,
+    }),
 
   addItem: (partial) => {
     const item: PrintItem = {
@@ -18,6 +60,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       height: Number(partial.height) || 0,
       quantity: Math.max(1, Math.floor(Number(partial.quantity) || 1)),
       imageSrc: partial.imageSrc,
+      assetId: partial.assetId,
       group: partial.group,
       priority: partial.priority ?? 0,
       allowRotation: partial.allowRotation ?? true,

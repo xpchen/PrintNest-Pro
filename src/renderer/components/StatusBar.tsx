@@ -2,11 +2,39 @@
  * 底部状态栏
  * 显示利用率 | 画布数量 | 素材等
  */
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { showToast } from '../utils/toast';
 
 export const StatusBar: React.FC = () => {
-  const { result, config, items } = useAppStore();
+  const {
+    result,
+    config,
+    items,
+    isComputing,
+    layoutProgress,
+    cancelLayoutJob,
+    lastLayoutRunId,
+    currentProjectId,
+  } = useAppStore();
+
+  const handleExportHistoricalPdf = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!lastLayoutRunId || !api?.exportPdfHistoricalRun || !api?.saveFile) return;
+    const isPdfOk = await api.isPdfAvailable?.();
+    if (!isPdfOk) {
+      showToast('PDFKit 未安装');
+      return;
+    }
+    const outputPath = await api.saveFile('PrintNest_历史排版.pdf', 'PDF', ['pdf']);
+    if (!outputPath) return;
+    const res = await api.exportPdfHistoricalRun({
+      projectId: currentProjectId,
+      layoutRunId: lastLayoutRunId,
+      outputPath,
+    });
+    showToast(res.success ? '历史 Run PDF 已导出' : `导出失败: ${res.error ?? ''}`);
+  }, [currentProjectId, lastLayoutRunId]);
 
   const canvasCount = result?.canvases.length ?? 0;
   const utilization = result?.totalUtilization ?? 0;
@@ -60,6 +88,29 @@ export const StatusBar: React.FC = () => {
         </div>
       )}
       <div style={{ flex: 1 }} />
+      {isComputing && (
+        <div className="statusbar-item" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>排版 {Math.round(layoutProgress)}%</span>
+          <button type="button" className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={cancelLayoutJob}>
+            取消
+          </button>
+        </div>
+      )}
+      {!isComputing && lastLayoutRunId && (
+        <div className="statusbar-item" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }} title="当前会话最近一次落库的排版运行">
+            run: {lastLayoutRunId.slice(0, 8)}…
+          </span>
+          <button
+            type="button"
+            className="btn"
+            style={{ padding: '2px 8px', fontSize: 11 }}
+            onClick={() => void handleExportHistoricalPdf()}
+          >
+            导出此 Run PDF
+          </button>
+        </div>
+      )}
       {elapsed > 0 && (
         <div className="statusbar-item">
           耗时: {elapsed.toFixed(0)}ms

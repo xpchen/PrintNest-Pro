@@ -527,6 +527,123 @@ body {
   background: var(--danger);
 }
 
+.btn-danger-ghost {
+  font-size: 12px;
+  padding: 4px 10px;
+  color: var(--danger);
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.btn-danger-ghost:hover {
+  border-color: var(--danger);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+/* 顶栏项目菜单 */
+.toolbar-project-menu {
+  position: relative;
+}
+.toolbar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 160px;
+  padding: 6px 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 400;
+}
+.toolbar-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.toolbar-dropdown-item:hover {
+  background: var(--bg-tertiary);
+}
+
+/* 轻首页 */
+.project-home {
+  flex: 1;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(165deg, var(--bg-primary) 0%, #252538 100%);
+}
+.project-home-card {
+  width: min(480px, 92vw);
+  padding: 32px 36px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.project-home-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+.project-home-sub {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+.project-home-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.project-home-list-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.project-home-empty {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.project-home-list {
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.project-home-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.project-home-open {
+  flex: 1;
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 14px;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.project-home-open:hover {
+  background: var(--bg-tertiary);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

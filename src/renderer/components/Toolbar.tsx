@@ -5,12 +5,10 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { PackingStrategy } from '../../shared/types';
+import type { ImportAssetResult } from '../../shared/persistence/importAssetResult';
 import { showToast } from '../utils/toast';
-
-const DEFAULT_DPI = 150;
-function pxToMm(px: number, dpi: number = DEFAULT_DPI): number {
-  return Math.round((px / dpi) * 25.4);
-}
+import { useToolbarProjectMenu } from '../hooks/useToolbarProjectMenu';
+import { DEFAULT_IMPORT_DPI, pxToMm } from '../utils/imageMm';
 
 interface ModalPreview {
   name: string;
@@ -19,6 +17,8 @@ interface ModalPreview {
   ph: number;
   mmW: number;
   mmH: number;
+  /** Electron：磁盘路径，确认导入时走 importAssets */
+  localPath?: string;
 }
 
 export const Toolbar: React.FC = () => {
@@ -27,12 +27,23 @@ export const Toolbar: React.FC = () => {
     addItem, setConfig, setCanvasSize, runAutoLayout, setZoom,
     showGrid, showRuler, showSafeMargin, snapMm,
     setShowGrid, setShowRuler, setShowSafeMargin, setSnapMm,
+    currentProjectId,
   } = useAppStore();
+
+  const {
+    projectMenuOpen,
+    setProjectMenuOpen,
+    projectMenuRef,
+    handleProjectNew,
+    handleProjectOpenRecent,
+    handleProjectSaveAs,
+    handleProjectClose,
+  } = useToolbarProjectMenu();
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [modalPreviews, setModalPreviews] = useState<ModalPreview[]>([]);
-  const [modalDpi, setModalDpi] = useState(DEFAULT_DPI);
+  const [modalDpi, setModalDpi] = useState(DEFAULT_IMPORT_DPI);
   const [modalQty, setModalQty] = useState(5);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalFileRef = useRef<HTMLInputElement>(null);
@@ -41,7 +52,7 @@ export const Toolbar: React.FC = () => {
   const openModal = useCallback(() => {
     setShowModal(true);
     setModalPreviews([]);
-    setModalDpi(DEFAULT_DPI);
+    setModalDpi(DEFAULT_IMPORT_DPI);
     setModalQty(5);
   }, []);
 
@@ -88,23 +99,77 @@ export const Toolbar: React.FC = () => {
   }, []);
 
   /** Add items from modal */
-  const addFromModal = useCallback(() => {
+  const addFromModal = useCallback(async () => {
     if (modalPreviews.length === 0) {
       showToast('请先选择图片');
       return;
     }
+    const api = window.electronAPI;
+    const paths = modalPreviews.map((p) => p.localPath).filter(Boolean) as string[];
+    let imported: ImportAssetResult[] = [];
+    if (api?.importAssets && paths.length > 0) {
+      imported = await api.importAssets(currentProjectId, paths);
+    }
+    let ip = 0;
     for (const p of modalPreviews) {
-      addItem({
-        name: p.name.replace(/\.\w+$/, ''),
-        width: p.mmW,
-        height: p.mmH,
-        quantity: modalQty,
-        imageSrc: p.src,
-      });
+      const baseName = p.name.replace(/\.\w+$/, '');
+      if (p.localPath && imported[ip]) {
+        const r = imported[ip++];
+        addItem({
+          name: baseName,
+          width: p.mmW,
+          height: p.mmH,
+          quantity: modalQty,
+          imageSrc: p.src,
+          assetId: r.assetId,
+        });
+      } else {
+        addItem({
+          name: baseName,
+          width: p.mmW,
+          height: p.mmH,
+          quantity: modalQty,
+          imageSrc: p.src,
+        });
+      }
     }
     setShowModal(false);
     showToast(`已导入 ${modalPreviews.length} 个素材`);
-  }, [modalPreviews, modalQty, addItem]);
+  }, [modalPreviews, modalQty, addItem, currentProjectId]);
+
+  const openModalPicker = useCallback(async () => {
+    const api = window.electronAPI;
+    if (api?.openFiles && api?.readAsBase64) {
+      const filePaths = await api.openFiles();
+      if (!filePaths || filePaths.length === 0) return;
+      const previews: ModalPreview[] = [];
+      for (const fp of filePaths) {
+        const b64 = await api.readAsBase64(fp);
+        if (!b64) continue;
+        const name = fp.replace(/^.*[/\\]/, '');
+        const img = new Image();
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = b64;
+        });
+        if (img.naturalWidth > 0) {
+          previews.push({
+            name,
+            src: b64,
+            pw: img.naturalWidth,
+            ph: img.naturalHeight,
+            mmW: pxToMm(img.naturalWidth, modalDpi),
+            mmH: pxToMm(img.naturalHeight, modalDpi),
+            localPath: fp,
+          });
+        }
+      }
+      setModalPreviews(previews);
+      return;
+    }
+    modalFileRef.current?.click();
+  }, [modalDpi]);
 
   /** Import rows from Excel (内部单号 + 尺寸 cm) */
   const handleImportExcel = useCallback(async () => {
@@ -248,6 +313,7 @@ export const Toolbar: React.FC = () => {
         return {
           x: p.x, y: p.y, width: p.width, height: p.height, rotated: p.rotated,
           imageBase64: item?.imageSrc || undefined,
+          assetId: item?.assetId,
           color: item?.color || '#ccc',
           name: item?.name || '',
         };
@@ -261,6 +327,7 @@ export const Toolbar: React.FC = () => {
       bleed: config.globalBleed,
       showCropMarks: true,
       outputPath,
+      projectId: currentProjectId,
     });
 
     if (res.success) {
@@ -268,11 +335,35 @@ export const Toolbar: React.FC = () => {
     } else {
       showToast('导出失败: ' + res.error);
     }
-  }, [result, items, config]);
+  }, [result, items, config, currentProjectId]);
 
   return (
     <>
       <div className="toolbar">
+        <div className="toolbar-group toolbar-project-menu" ref={projectMenuRef}>
+          <button type="button" className="btn" onClick={() => setProjectMenuOpen((v) => !v)}>
+            项目 ▾
+          </button>
+          {projectMenuOpen && (
+            <div className="toolbar-dropdown">
+              <button type="button" className="toolbar-dropdown-item" onClick={() => void handleProjectNew()}>
+                新建
+              </button>
+              <button type="button" className="toolbar-dropdown-item" onClick={() => void handleProjectOpenRecent()}>
+                打开最近
+              </button>
+              <button type="button" className="toolbar-dropdown-item" onClick={() => void handleProjectSaveAs()}>
+                另存为
+              </button>
+              <button type="button" className="toolbar-dropdown-item" onClick={handleProjectClose}>
+                关闭（回首页）
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="toolbar-divider" />
+
         {/* Import */}
         <div className="toolbar-group">
           <button className="btn" onClick={openModal}>&#128206; 导入图片</button>
@@ -438,7 +529,7 @@ export const Toolbar: React.FC = () => {
             />
             <div
               className={`upload-area${modalPreviews.length > 0 ? ' has-file' : ''}`}
-              onClick={() => modalFileRef.current?.click()}
+              onClick={() => void openModalPicker()}
               onDragOver={(e) => { e.preventDefault(); }}
               onDrop={(e) => { e.preventDefault(); processModalFiles(Array.from(e.dataTransfer.files)); }}
             >

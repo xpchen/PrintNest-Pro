@@ -6,34 +6,26 @@
  *     projects/
  *       {projectId}/
  *         assets/         ← 图片素材副本
- *         project.json    ← 项目数据（素材列表、排版配置等）
+ *         project.db      ← 权威业务数据（P0+）
+ *         project.json    ← 过渡保险快照（与 DB 对账，冲突以 DB 为准）
  */
-import { app, ipcMain } from 'electron';
+import { ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
+import { getAppDataProjectsRoot, getProjectDirectory, ensureProjectLayout } from './projectPaths';
+import {
+  loadEditorState,
+  saveEditorState,
+  hydrateItemImageSrcs,
+  mergeImageSrcFromLegacyJson,
+} from './db/repositories/editorStateRepository';
+import type { SerializedEditorState } from '../shared/persistence/editorState';
+import { emptyEditorState } from '../shared/persistence/editorState';
+import type { ImportAssetResult } from '../shared/persistence/importAssetResult';
+import { getOrOpenProjectDb, closeProjectDb } from './db/projectDb';
 
-/** 应用数据根目录 */
-function getAppDataDir(): string {
-  const dir = path.join(app.getPath('userData'), 'projects');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
-/** 获取项目根目录（不存在则创建），供素材/DB/自动保存共用 */
-export function getProjectDirectory(projectId: string): string {
-  const dir = path.join(getAppDataDir(), projectId);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
-/** 产品级目录：assets / exports / snapshots / temp */
-export function ensureProjectLayout(projectId: string): void {
-  const root = getProjectDirectory(projectId);
-  for (const name of ['assets', 'exports', 'snapshots', 'temp']) {
-    const sub = path.join(root, name);
-    if (!fs.existsSync(sub)) fs.mkdirSync(sub, { recursive: true });
-  }
-}
+export { getProjectDirectory, ensureProjectLayout } from './projectPaths';
 
 function getProjectDir(projectId: string): string {
   return getProjectDirectory(projectId);
@@ -46,8 +38,9 @@ function getAssetsDir(projectId: string): string {
   return dir;
 }
 
-/** 复制图片到项目素材目录，返回新路径 */
-function importAsset(projectId: string, srcPath: string): string {
+/** 复制图片到项目素材目录，写入 assets 表，返回绝对路径与 assetId */
+function importAsset(projectId: string, srcPath: string): ImportAssetResult {
+  ensureProjectLayout(projectId);
   const assetsDir = getAssetsDir(projectId);
   const ext = path.extname(srcPath);
   const baseName = path.basename(srcPath, ext);
@@ -56,45 +49,99 @@ function importAsset(projectId: string, srcPath: string): string {
   const destPath = path.join(assetsDir, destName);
 
   fs.copyFileSync(srcPath, destPath);
-  return destPath;
+  const relativePath = path.join('assets', destName).split(path.sep).join('/');
+  const assetId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const db = getOrOpenProjectDb(projectId);
+  if (db) {
+    db.prepare(
+      `INSERT INTO assets (id, managed_relative_path, imported_at) VALUES (?, ?, ?)`,
+    ).run(assetId, relativePath, now);
+  }
+  return { absolutePath: destPath, assetId, relativePath };
 }
 
-/** 批量导入素材 */
-function importAssets(projectId: string, srcPaths: string[]): string[] {
+/** 批量导入素材（受管 assets/ + DB 登记） */
+function importAssets(projectId: string, srcPaths: string[]): ImportAssetResult[] {
   return srcPaths.map((p) => importAsset(projectId, p));
 }
 
-/** 保存项目数据 */
+function payloadToEditorState(projectId: string, data: object): SerializedEditorState {
+  const d = data as Record<string, unknown>;
+  return {
+    projectName: (d.projectName as string) || projectId,
+    config: d.config as SerializedEditorState['config'],
+    items: (d.items as SerializedEditorState['items']) ?? [],
+    result: (d.result as SerializedEditorState['result']) ?? null,
+    layoutSourceSignature: (d.layoutSourceSignature as string) ?? null,
+  };
+}
+
+/** 保存项目：写入 project.db（权威）+ project.json（阶段 1 保险快照） */
 function saveProject(projectId: string, data: object): void {
   ensureProjectLayout(projectId);
-  const projectDir = getProjectDir(projectId);
-  const filePath = path.join(projectDir, 'project.json');
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  const state = payloadToEditorState(projectId, data);
+  if (!state.config) {
+    console.warn('[fileManager] skip save: missing config');
+    return;
+  }
+  saveEditorState(projectId, state, { jsonSnapshot: true });
 }
 
-/** 加载项目数据 */
+/** 加载项目：优先 DB，必要时从 project.json 迁移并合并预览图 */
 function loadProject(projectId: string): object | null {
-  const filePath = path.join(getProjectDir(projectId), 'project.json');
-  if (!fs.existsSync(filePath)) return null;
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(raw);
+  ensureProjectLayout(projectId);
+  const state = loadEditorState(projectId);
+  if (!state) return null;
+  hydrateItemImageSrcs(projectId, state.items);
+  mergeImageSrcFromLegacyJson(projectId, state.items);
+  return state as object;
 }
 
-/** 列出所有项目 */
+/** 列出所有项目（含仅有 DB 的新项目） */
 function listProjects(): string[] {
-  const dir = getAppDataDir();
+  const dir = getAppDataProjectsRoot();
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir).filter((name) => {
-    const projectFile = path.join(dir, name, 'project.json');
-    return fs.existsSync(projectFile);
+    const root = path.join(dir, name);
+    if (!fs.statSync(root).isDirectory()) return false;
+    return (
+      fs.existsSync(path.join(root, 'project.json')) ||
+      fs.existsSync(path.join(root, 'project.db'))
+    );
   });
 }
 
 /** 删除项目 */
 function deleteProject(projectId: string): void {
+  closeProjectDb(projectId);
   const dir = getProjectDir(projectId);
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** 新建空项目（DB + 可选 JSON 快照） */
+function createProject(projectId: string): void {
+  ensureProjectLayout(projectId);
+  saveEditorState(projectId, emptyEditorState(projectId), { jsonSnapshot: true });
+}
+
+/** 另存为：复制整个项目目录（不预先创建空目标目录，避免污染 cp） */
+function duplicateProject(srcId: string, destId: string): boolean {
+  try {
+    closeProjectDb(srcId);
+    closeProjectDb(destId);
+    const root = getAppDataProjectsRoot();
+    const srcRoot = path.join(root, srcId);
+    const destRoot = path.join(root, destId);
+    if (!fs.existsSync(srcRoot)) return false;
+    if (fs.existsSync(destRoot)) fs.rmSync(destRoot, { recursive: true, force: true });
+    fs.cpSync(srcRoot, destRoot, { recursive: true });
+    return true;
+  } catch (e) {
+    console.error('[duplicateProject]', e);
+    return false;
   }
 }
 
@@ -117,7 +164,7 @@ export function registerFileManagerIPC(): void {
     return loadProject(projectId);
   });
 
-  // 自动保存（定时器由渲染进程触发，写入 project.json）
+  // 自动保存：DB 权威 + JSON 保险快照（渲染进程防抖后调用）
   ipcMain.handle('file:autoSaveProject', async (_event, projectId: string, data: object) => {
     saveProject(projectId, data);
     return true;
@@ -132,6 +179,15 @@ export function registerFileManagerIPC(): void {
   ipcMain.handle('file:deleteProject', async (_event, projectId: string) => {
     deleteProject(projectId);
     return true;
+  });
+
+  ipcMain.handle('file:createProject', async (_event, projectId: string) => {
+    createProject(projectId);
+    return true;
+  });
+
+  ipcMain.handle('file:duplicateProject', async (_event, srcId: string, destId: string) => {
+    return duplicateProject(srcId, destId);
   });
 
   // 读取文件为 base64（用于渲染器显示本地图片）
