@@ -1,6 +1,7 @@
 import type { PrintItem, Placement, LayoutConfig, LayoutResult } from '../../shared/types';
 import { PackingStrategy } from '../../shared/types';
 import type { ManualEditPatch } from '../../shared/persistence/manualEdits';
+import type { DisplayLengthUnit } from '../utils/lengthDisplay';
 
 export interface ProjectSlice {
   items: PrintItem[];
@@ -54,15 +55,17 @@ export type AlignMode = 'left' | 'right' | 'top' | 'bottom' | 'hcenter' | 'vcent
 
 export type CanvasViewMode = 'fitAll' | 'fitWidth' | 'actual' | 'custom';
 
-export type RightDockTab = 'properties' | 'project' | 'canvas';
+/** 左侧任务栏四段 */
+export type LeftTaskTab = 'project' | 'resources' | 'layoutTask' | 'qaOutput';
+
+/** 顶栏工作模式（模板/输出为壳层占位，后续接实页） */
+export type EditorWorkMode = 'resources' | 'template' | 'layout' | 'output';
 
 export interface UiShellSlice {
   leftDockCollapsed: boolean;
   rightDockCollapsed: boolean;
-  rightTab: RightDockTab;
   toggleLeftDock: () => void;
   toggleRightDock: () => void;
-  setRightTab: (tab: RightDockTab) => void;
   expandLeftDock: () => void;
   expandRightDock: () => void;
 }
@@ -74,6 +77,8 @@ export interface CanvasViewSlice {
   showRuler: boolean;
   showSafeMargin: boolean;
   snapMm: number;
+  /** 画布与只读标签的显示单位；存储与引擎仍为 mm */
+  displayUnit: DisplayLengthUnit;
   viewMode: CanvasViewMode;
   /** 画布原点 (0,0) 在视图像素中的位置；见 viewportContract.md */
   panOffset: { x: number; y: number };
@@ -87,8 +92,11 @@ export interface CanvasViewSlice {
   importModalNonce: number;
   excelImportNonce: number;
   runPanelVisible: boolean;
-  /** 左侧栏当前 Tab */
-  sidebarTab: 'materials' | 'validation' | 'run';
+  /** 左侧任务栏当前段 */
+  sidebarTab: LeftTaskTab;
+  editorWorkMode: EditorWorkMode;
+  /** 画布上指针位置 mm（状态栏用，可为 null） */
+  canvasPointerMm: { x: number; y: number } | null;
 
   setActiveCanvas: (index: number) => void;
   setZoom: (zoom: number) => void;
@@ -96,6 +104,7 @@ export interface CanvasViewSlice {
   setShowRuler: (v: boolean) => void;
   setShowSafeMargin: (v: boolean) => void;
   setSnapMm: (mm: number) => void;
+  setDisplayUnit: (unit: DisplayLengthUnit) => void;
 
   setPanOffset: (p: { x: number; y: number }) => void;
   setViewportContainerPx: (width: number, height: number) => void;
@@ -110,7 +119,9 @@ export interface CanvasViewSlice {
   toggleStatusBar: () => void;
   toggleRunPanel: () => void;
   setRunPanelVisible: (v: boolean) => void;
-  setSidebarTab: (t: 'materials' | 'validation' | 'run') => void;
+  setSidebarTab: (t: LeftTaskTab) => void;
+  setEditorWorkMode: (m: EditorWorkMode) => void;
+  setCanvasPointerMm: (p: { x: number; y: number } | null) => void;
 
   requestImportImages: () => void;
   requestImportExcel: () => void;

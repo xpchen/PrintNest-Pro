@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { buildLayoutSignature } from '../../../shared/layoutSignature';
+import { DISPLAY_UNIT_OPTIONS, type DisplayLengthUnit } from '../../utils/lengthDisplay';
 
 export const CanvasHeader: React.FC = () => {
   const {
@@ -10,6 +11,9 @@ export const CanvasHeader: React.FC = () => {
     overviewVisible, setOverviewVisible,
     items, config, layoutSourceSignature,
     runAutoLayout,
+    showGrid, showRuler, showSafeMargin, snapMm,
+    setShowGrid, setShowRuler, setShowSafeMargin, setSnapMm,
+    displayUnit, setDisplayUnit,
   } = useAppStore();
 
   const layoutStale =
@@ -57,7 +61,7 @@ export const CanvasHeader: React.FC = () => {
           <span className="canvas-header__util">利用率 {(curU * 100).toFixed(1)}%</span>
         )}
 
-        <div className="canvas-header__views" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="canvas-header__views canvas-header__views--tools" onMouseDown={(e) => e.stopPropagation()}>
           <button type="button" className="btn btn-tiny" onClick={() => applyViewFitAll()}>
             全部可见
           </button>
@@ -74,6 +78,50 @@ export const CanvasHeader: React.FC = () => {
           >
             鹰眼
           </button>
+        </div>
+
+        <div className="canvas-header__divider" aria-hidden />
+
+        <div className="canvas-header__views" onMouseDown={(e) => e.stopPropagation()}>
+          <label className="canvas-header__check">
+            <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} />
+            网格
+          </label>
+          <label className="canvas-header__check">
+            <input type="checkbox" checked={showRuler} onChange={(e) => setShowRuler(e.target.checked)} />
+            标尺
+          </label>
+          <label className="canvas-header__check" title="按安全边参数显示内缩虚线">
+            <input type="checkbox" checked={showSafeMargin} onChange={(e) => setShowSafeMargin(e.target.checked)} />
+            安全边线
+          </label>
+          <label className="canvas-header__snap">
+            <span className="canvas-header__snap-label">吸附</span>
+            <select
+              className="select select-shell select-shell--compact"
+              value={snapMm}
+              onChange={(e) => setSnapMm(Number(e.target.value))}
+            >
+              <option value={1}>1 mm</option>
+              <option value={5}>5 mm</option>
+              <option value={10}>10 mm</option>
+              <option value={25}>25 mm</option>
+            </select>
+          </label>
+          <label className="canvas-header__snap" title="画布与只读标签的显示单位；存储与排版仍为 mm">
+            <span className="canvas-header__snap-label">单位</span>
+            <select
+              className="select select-shell select-shell--compact"
+              value={displayUnit}
+              onChange={(e) => setDisplayUnit(e.target.value as DisplayLengthUnit)}
+            >
+              {DISPLAY_UNIT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="canvas-header__zoom" onMouseDown={(e) => e.stopPropagation()}>

@@ -6,6 +6,13 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Placement } from '../../shared/types';
+import {
+  displayUnitAbbrev,
+  formatLengthMm,
+  formatPairMm,
+  formatRulerTickMm,
+  getDisplayGeometrySteps,
+} from '../utils/lengthDisplay';
 
 // ==================== Image Cache ====================
 const imageCache = new Map<string, HTMLImageElement>();
@@ -73,7 +80,7 @@ export const CanvasArea: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const {
-    result, config, items, activeCanvasIndex, selectedIds, zoom,
+    result, config, items, activeCanvasIndex, selectedIds, zoom, displayUnit,
     showGrid, showRuler, showSafeMargin,
     setSelectedIds, toggleLock, updatePlacement, deleteSelected,
     panOffset, setPanOffset,
@@ -201,6 +208,17 @@ export const CanvasArea: React.FC = () => {
     const placementVisible = (p: Placement) =>
       p.x + p.width >= viewLeft && p.x <= viewRight && p.y + p.height >= viewTop && p.y <= viewBottom;
 
+    /** 网格/标尺仅绘制与视口相交部分，大画布时减少 stroke 次数 */
+    const gridX0 = Math.max(0, viewLeft);
+    const gridX1 = Math.min(canvasW, viewRight);
+    const gridY0 = Math.max(0, viewTop);
+    const gridY1 = Math.min(canvasH, viewBottom);
+    const rulerPadMm = 80;
+    const rulerX0 = Math.max(0, viewLeft - rulerPadMm);
+    const rulerX1 = Math.min(canvasW, viewRight + rulerPadMm);
+    const rulerY0 = Math.max(0, viewTop - rulerPadMm);
+    const rulerY1 = Math.min(canvasH, viewBottom + rulerPadMm);
+
     ctx.save();
     ctx.translate(ox, oy);
     ctx.scale(z, z);
@@ -214,25 +232,54 @@ export const CanvasArea: React.FC = () => {
     ctx.fillRect(0, 0, canvasW, canvasH);
     ctx.shadowColor = 'transparent';
 
-    // Grid
-    if (showGrid) {
-      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-      ctx.lineWidth = 0.35 / z;
-      for (let x = 10; x < canvasW; x += 10) {
-        if (x % 50 === 0) continue;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvasH); ctx.stroke();
-      }
-      for (let y = 10; y < canvasH; y += 10) {
-        if (y % 50 === 0) continue;
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvasW, y); ctx.stroke();
-      }
-      ctx.strokeStyle = '#e8e8e8';
-      ctx.lineWidth = 0.55 / z;
-      for (let x = 50; x < canvasW; x += 50) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvasH); ctx.stroke();
-      }
-      for (let y = 50; y < canvasH; y += 50) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvasW, y); ctx.stroke();
+    // Grid（mm：保留 10/50；其它单位按显示步长；按视口裁剪竖线/横线）
+    if (showGrid && gridX0 < gridX1 && gridY0 < gridY1) {
+      if (displayUnit === 'mm') {
+        ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+        ctx.lineWidth = 0.35 / z;
+        const xFineStart = Math.max(10, Math.ceil((gridX0 - GE) / 10) * 10);
+        for (let x = xFineStart; x < gridX1 && x < canvasW; x += 10) {
+          if (x % 50 === 0) continue;
+          ctx.beginPath(); ctx.moveTo(x, gridY0); ctx.lineTo(x, gridY1); ctx.stroke();
+        }
+        const yFineStart = Math.max(10, Math.ceil((gridY0 - GE) / 10) * 10);
+        for (let y = yFineStart; y < gridY1 && y < canvasH; y += 10) {
+          if (y % 50 === 0) continue;
+          ctx.beginPath(); ctx.moveTo(gridX0, y); ctx.lineTo(gridX1, y); ctx.stroke();
+        }
+        ctx.strokeStyle = '#e8e8e8';
+        ctx.lineWidth = 0.55 / z;
+        const xMajorStart = Math.max(50, Math.ceil((gridX0 - GE) / 50) * 50);
+        for (let x = xMajorStart; x < gridX1 && x < canvasW; x += 50) {
+          ctx.beginPath(); ctx.moveTo(x, gridY0); ctx.lineTo(x, gridY1); ctx.stroke();
+        }
+        const yMajorStart = Math.max(50, Math.ceil((gridY0 - GE) / 50) * 50);
+        for (let y = yMajorStart; y < gridY1 && y < canvasH; y += 50) {
+          ctx.beginPath(); ctx.moveTo(gridX0, y); ctx.lineTo(gridX1, y); ctx.stroke();
+        }
+      } else {
+        const { minorStepMm, majorStepMm } = getDisplayGeometrySteps(displayUnit, z, canvasW, canvasH);
+        const stepsPerMajor = Math.max(1, Math.round(majorStepMm / minorStepMm + 1e-9));
+        const iX0 = Math.max(1, Math.ceil((gridX0 - GE) / minorStepMm));
+        const iX1 = Math.min(Math.floor((gridX1 + GE) / minorStepMm), Math.ceil(canvasW / minorStepMm));
+        for (let i = iX0; i <= iX1; i++) {
+          const x = i * minorStepMm;
+          if (x <= 0 || x >= canvasW) continue;
+          const isMajor = i % stepsPerMajor === 0;
+          ctx.strokeStyle = isMajor ? '#e8e8e8' : 'rgba(0,0,0,0.06)';
+          ctx.lineWidth = (isMajor ? 0.55 : 0.35) / z;
+          ctx.beginPath(); ctx.moveTo(x, gridY0); ctx.lineTo(x, gridY1); ctx.stroke();
+        }
+        const iY0 = Math.max(1, Math.ceil((gridY0 - GE) / minorStepMm));
+        const iY1 = Math.min(Math.floor((gridY1 + GE) / minorStepMm), Math.ceil(canvasH / minorStepMm));
+        for (let i = iY0; i <= iY1; i++) {
+          const y = i * minorStepMm;
+          if (y <= 0 || y >= canvasH) continue;
+          const isMajor = i % stepsPerMajor === 0;
+          ctx.strokeStyle = isMajor ? '#e8e8e8' : 'rgba(0,0,0,0.06)';
+          ctx.lineWidth = (isMajor ? 0.55 : 0.35) / z;
+          ctx.beginPath(); ctx.moveTo(gridX0, y); ctx.lineTo(gridX1, y); ctx.stroke();
+        }
       }
     }
 
@@ -256,11 +303,11 @@ export const CanvasArea: React.FC = () => {
     ctx.fillStyle = '#666';
     ctx.font = `${11 / z}px sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(`${canvasW} mm`, canvasW / 2, -6 / z);
+    ctx.fillText(formatLengthMm(canvasW, displayUnit), canvasW / 2, -6 / z);
     ctx.save();
     ctx.translate(-8 / z, canvasH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText(`${canvasH} mm`, 0, 0);
+    ctx.fillText(formatLengthMm(canvasH, displayUnit), 0, 0);
     ctx.restore();
     ctx.textAlign = 'start';
 
@@ -298,7 +345,7 @@ export const CanvasArea: React.FC = () => {
             ctx.font = `${Math.max(6 / z, 7)}px sans-serif`;
             ctx.textAlign = 'center';
             ctx.fillText(
-              `${Math.round(p.width)}×${Math.round(p.height)}`,
+              formatPairMm(p.width, p.height, displayUnit),
               p.x + p.width / 2,
               p.y + p.height - 5 / z,
             );
@@ -324,7 +371,7 @@ export const CanvasArea: React.FC = () => {
           ctx.fillText('\u{1F512}', p.x + p.width / 2 - 7 / z, p.y + p.height / 2 + 5 / z);
         }
 
-        // Name + 排版占用尺寸（mm，含出血/间距；与侧栏「设计尺寸」可能不同）
+        // Name + 排版占用尺寸（内部 mm；与侧栏「设计尺寸」可能不同）
         if (!img && p.width * z > 30 && p.height * z > 20) {
           const fontSize = Math.max(7 / z, Math.min(10, p.width * 0.08) / z);
           const showDim = p.width * z > 52 && p.height * z > 32;
@@ -342,7 +389,7 @@ export const CanvasArea: React.FC = () => {
             const sm = Math.max(6 / z, fontSize * 0.72);
             ctx.font = `${sm}px sans-serif`;
             ctx.fillText(
-              `${Math.round(p.width)}×${Math.round(p.height)} mm 占用`,
+              `${formatPairMm(p.width, p.height, displayUnit)} 占用`,
               p.x + p.width / 2,
               cy + Math.max(sm, fontSize * 0.45),
             );
@@ -381,7 +428,7 @@ export const CanvasArea: React.FC = () => {
 
     ctx.restore();
 
-    // 标尺（屏幕像素坐标）
+    // 标尺（屏幕像素坐标；mm 保留 10/50/100 档，其它单位按显示步长）
     if (showRuler) {
       ctx.save();
       ctx.strokeStyle = 'rgba(180,180,200,0.85)';
@@ -390,32 +437,76 @@ export const CanvasArea: React.FC = () => {
       ctx.lineWidth = 1;
       const tickMajor = 14;
       const tickMinor = 8;
-      for (let mm = 0; mm <= canvasW; mm += 10) {
-        const px = ox + mm * z;
-        const major = mm % 100 === 0;
-        ctx.beginPath();
-        ctx.moveTo(px, Math.max(0, oy - 1));
-        ctx.lineTo(px, oy - (major ? tickMajor : mm % 50 === 0 ? tickMinor + 3 : tickMinor));
-        ctx.stroke();
-        if (major && mm > 0) {
-          ctx.fillText(String(mm), px - 8, oy - tickMajor - 2);
+      if (displayUnit === 'mm') {
+        const mmXStart = Math.max(0, Math.floor(rulerX0 / 10) * 10);
+        for (let mmPos = mmXStart; mmPos <= rulerX1 && mmPos <= canvasW; mmPos += 10) {
+          const px = ox + mmPos * z;
+          const major = mmPos % 100 === 0;
+          ctx.beginPath();
+          ctx.moveTo(px, Math.max(0, oy - 1));
+          ctx.lineTo(px, oy - (major ? tickMajor : mmPos % 50 === 0 ? tickMinor + 3 : tickMinor));
+          ctx.stroke();
+          if (major && mmPos > 0) {
+            ctx.fillText(String(mmPos), px - 8, oy - tickMajor - 2);
+          }
+        }
+        const mmYStart = Math.max(0, Math.floor(rulerY0 / 10) * 10);
+        for (let mmPos = mmYStart; mmPos <= rulerY1 && mmPos <= canvasH; mmPos += 10) {
+          const py = oy + mmPos * z;
+          const major = mmPos % 100 === 0;
+          ctx.beginPath();
+          ctx.moveTo(Math.max(0, ox - 1), py);
+          ctx.lineTo(ox - (major ? tickMajor : mmPos % 50 === 0 ? tickMinor + 3 : tickMinor), py);
+          ctx.stroke();
+          if (major && mmPos > 0) {
+            ctx.save();
+            ctx.translate(ox - tickMajor - 14, py + 3);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(String(mmPos), 0, 0);
+            ctx.restore();
+          }
+        }
+      } else {
+        const { minorStepMm, majorStepMm } = getDisplayGeometrySteps(displayUnit, z, canvasW, canvasH);
+        const stepsPerMajor = Math.max(1, Math.round(majorStepMm / minorStepMm + 1e-9));
+        const iX0 = Math.max(0, Math.ceil((rulerX0 - GE) / minorStepMm));
+        const iX1 = Math.min(Math.floor((rulerX1 + GE) / minorStepMm), Math.ceil(canvasW / minorStepMm + GE));
+        for (let i = iX0; i <= iX1; i++) {
+          const mmPos = i * minorStepMm;
+          if (mmPos > canvasW) break;
+          const px = ox + mmPos * z;
+          const isMajor = i > 0 && i % stepsPerMajor === 0;
+          ctx.beginPath();
+          ctx.moveTo(px, Math.max(0, oy - 1));
+          ctx.lineTo(px, oy - (isMajor ? tickMajor : tickMinor));
+          ctx.stroke();
+          if (isMajor && mmPos > 0) {
+            ctx.fillText(formatRulerTickMm(mmPos, displayUnit), px - 8, oy - tickMajor - 2);
+          }
+        }
+        const iY0 = Math.max(0, Math.ceil((rulerY0 - GE) / minorStepMm));
+        const iY1 = Math.min(Math.floor((rulerY1 + GE) / minorStepMm), Math.ceil(canvasH / minorStepMm + GE));
+        for (let i = iY0; i <= iY1; i++) {
+          const mmPos = i * minorStepMm;
+          if (mmPos > canvasH) break;
+          const py = oy + mmPos * z;
+          const isMajor = i > 0 && i % stepsPerMajor === 0;
+          ctx.beginPath();
+          ctx.moveTo(Math.max(0, ox - 1), py);
+          ctx.lineTo(ox - (isMajor ? tickMajor : tickMinor), py);
+          ctx.stroke();
+          if (isMajor && mmPos > 0) {
+            ctx.save();
+            ctx.translate(ox - tickMajor - 14, py + 3);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(formatRulerTickMm(mmPos, displayUnit), 0, 0);
+            ctx.restore();
+          }
         }
       }
-      for (let mm = 0; mm <= canvasH; mm += 10) {
-        const py = oy + mm * z;
-        const major = mm % 100 === 0;
-        ctx.beginPath();
-        ctx.moveTo(Math.max(0, ox - 1), py);
-        ctx.lineTo(ox - (major ? tickMajor : mm % 50 === 0 ? tickMinor + 3 : tickMinor), py);
-        ctx.stroke();
-        if (major && mm > 0) {
-          ctx.save();
-          ctx.translate(ox - tickMajor - 14, py + 3);
-          ctx.rotate(-Math.PI / 2);
-          ctx.fillText(String(mm), 0, 0);
-          ctx.restore();
-        }
-      }
+      ctx.fillStyle = 'rgba(140,140,160,0.9)';
+      ctx.font = '9px sans-serif';
+      ctx.fillText(displayUnitAbbrev(displayUnit), Math.max(2, ox + 2), Math.max(10, oy - 2));
       ctx.restore();
     }
 
@@ -462,6 +553,7 @@ export const CanvasArea: React.FC = () => {
     edgeSafe,
     validationIssueIds,
     invalidDragTick,
+    displayUnit,
   ]);
 
   useEffect(() => { draw(); }, [draw]);
@@ -577,14 +669,14 @@ export const CanvasArea: React.FC = () => {
   /** Mouse move */
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+
       if (isPanning) {
         setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
         return;
       }
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
 
       if (isBoxSelecting) {
         const mx = (e.clientX - rect.left - panOffset.x) / zoom;
@@ -615,6 +707,13 @@ export const CanvasArea: React.FC = () => {
           dragInvalidRef.current = bad;
           setInvalidDragTick((t) => t + 1);
         }
+        return;
+      }
+
+      if (!isPanning && !isBoxSelecting && !isDragging) {
+        const mx = (e.clientX - rect.left - panOffset.x) / zoom;
+        const my = (e.clientY - rect.top - panOffset.y) / zoom;
+        useAppStore.getState().setCanvasPointerMm({ x: mx, y: my });
       }
     },
     [isPanning, panStart, isBoxSelecting, isDragging, panOffset, zoom, setPanOffset, boxSelect, setSelectedIds, currentCanvas, canvasW, canvasH, updatePlacement]
@@ -687,7 +786,7 @@ export const CanvasArea: React.FC = () => {
         img.onload = () => {
           const mmW = Math.round((img.naturalWidth / 150) * 25.4);
           const mmH = Math.round((img.naturalHeight / 150) * 25.4);
-          addItem({ name: file.name.replace(/\.\w+$/, ''), width: mmW, height: mmH, quantity: 5, imageSrc: src });
+          addItem({ name: file.name.replace(/\.\w+$/, ''), width: mmW, height: mmH, quantity: 1, imageSrc: src });
         };
         img.src = src;
       };
@@ -714,7 +813,10 @@ export const CanvasArea: React.FC = () => {
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={() => {
+            handleMouseUp();
+            useAppStore.getState().setCanvasPointerMm(null);
+          }}
           onContextMenu={handleContextMenu}
         />
       </div>

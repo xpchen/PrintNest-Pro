@@ -1,12 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { PrintItem } from '../../../shared/types';
+import { formatAreaMm, formatPairMm } from '../../utils/lengthDisplay';
 
 type SortKey = 'name' | 'area' | 'qty' | 'recent';
 
 export const AssetsPanel: React.FC = () => {
   const {
     items, removeItem, updateItem, clearItems, setSelectedIds, selectedIds, result, activeCanvasIndex,
+    displayUnit,
   } = useAppStore();
 
   const [search, setSearch] = useState('');
@@ -103,7 +105,7 @@ export const AssetsPanel: React.FC = () => {
         img.onload = () => {
           const mmW = Math.round((img.naturalWidth / 150) * 25.4);
           const mmH = Math.round((img.naturalHeight / 150) * 25.4);
-          addItem({ name: file.name.replace(/\.\w+$/, ''), width: mmW, height: mmH, quantity: 5, imageSrc: src });
+          addItem({ name: file.name.replace(/\.\w+$/, ''), width: mmW, height: mmH, quantity: 1, imageSrc: src });
         };
         img.src = src;
       };
@@ -203,7 +205,7 @@ export const AssetsPanel: React.FC = () => {
               <div className="sidebar-item-info">
                 <div className="sidebar-item-name">{item.name}</div>
                 <div className="sidebar-item-meta">
-                  {Math.round(item.width)}×{Math.round(item.height)} mm · ×{item.quantity}
+                  {formatPairMm(item.width, item.height, displayUnit)} · ×{item.quantity}
                   {item.group ? ` · ${item.group}` : ''}
                 </div>
               </div>
@@ -238,7 +240,7 @@ export const AssetsPanel: React.FC = () => {
 
       <div className="panel-assets__stats">
         <span>共 {items.length} 种</span>
-        <span>累计面积约 {Math.round(totalArea)} mm²</span>
+        <span>累计面积约 {formatAreaMm(totalArea, displayUnit)}</span>
         {result && <span className={unplacedItems > 0 ? 'text-warn' : ''}>待排入 {unplacedItems}</span>}
       </div>
 

@@ -40,7 +40,7 @@ export const ProjectSummaryPanel: React.FC = () => {
         </div>
       </div>
       <div className="panel-summary__hint panel-summary__block">
-        在左侧「素材 / 校验 / Run」与中间画布之间切换；选中对象后在「属性」Tab 编辑。
+        左侧按「项目 → 资源 → 排版任务 → 校验与输出」组织生产流程；选中画布对象后在右侧属性栏编辑。
       </div>
     </div>
   );

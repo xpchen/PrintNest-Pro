@@ -1,5 +1,5 @@
 /**
- * PrintNest Pro — AppFrame：AppTopBar + ContextBar + Workspace(Docks + CenterStage) + StatusBar
+ * PrintNest Pro — AppFrame：AppTopBar + Workspace(Docks + CenterStage) + StatusBar
  */
 import React, { useEffect, useRef } from 'react';
 import { CanvasArea } from './components/CanvasArea';
@@ -9,7 +9,7 @@ import { StatusBar } from './components/StatusBar';
 import { ProjectHome, readLastProjectId } from './components/project/ProjectHome';
 import { EditorChromeProvider } from './components/shell/EditorChromeContext';
 import { AppTopBar } from './components/shell/AppTopBar';
-import { ContextBar } from './components/shell/ContextBar';
+import { EditorModePlaceholder } from './components/shell/EditorModePlaceholder';
 import { LeftDock } from './components/shell/LeftDock';
 import { RightDock } from './components/shell/RightDock';
 import { useAppStore } from './store/useAppStore';
@@ -21,7 +21,11 @@ export const App: React.FC = () => {
   const uiPhase = useAppStore((s) => s.uiPhase);
   const statusBarVisible = useAppStore((s) => s.statusBarVisible);
   const currentProjectId = useAppStore((s) => s.currentProjectId);
+  const editorWorkMode = useAppStore((s) => s.editorWorkMode);
+  const overviewVisible = useAppStore((s) => s.overviewVisible);
   const saveTimerRef = useRef<number | undefined>(undefined);
+
+  const showLayoutWorkbench = editorWorkMode === 'layout' || editorWorkMode === 'resources';
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -134,15 +138,28 @@ export const App: React.FC = () => {
     <EditorChromeProvider>
       <div className="app-layout app-layout--v11">
         <AppTopBar />
-        <ContextBar />
         <div className="app-workspace">
           <LeftDock />
           <main className="center-stage">
-            <CanvasHeader />
-            <div className="center-stage__canvas-wrap">
-              <CanvasArea />
-              <OverviewCard />
-            </div>
+            {showLayoutWorkbench ? (
+              <>
+                <CanvasHeader />
+                <div className="center-stage__main-row">
+                  <div className="center-stage__viewport-wrap">
+                    <CanvasArea />
+                  </div>
+                  {overviewVisible ? (
+                    <aside className="center-stage__overview-strip" aria-label="鹰眼导航">
+                      <OverviewCard />
+                    </aside>
+                  ) : null}
+                </div>
+              </>
+            ) : editorWorkMode === 'template' ? (
+              <EditorModePlaceholder mode="template" />
+            ) : (
+              <EditorModePlaceholder mode="output" />
+            )}
           </main>
           <RightDock />
         </div>

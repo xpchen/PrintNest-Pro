@@ -1,31 +1,44 @@
 import type { StateCreator } from 'zustand';
-import type { AppState } from '../types';
-import type { UiShellSlice, RightDockTab } from '../types';
+import type { AppState, LeftTaskTab, UiShellSlice } from '../types';
+import { isDisplayLengthUnit } from '../../utils/lengthDisplay';
 
-export const createUiShellSlice: StateCreator<AppState, [], [], UiShellSlice> = (set, get) => ({
+function migrateLeftTaskTab(raw: unknown): LeftTaskTab | undefined {
+  if (raw === 'project' || raw === 'resources' || raw === 'layoutTask' || raw === 'qaOutput') return raw;
+  if (raw === 'materials') return 'resources';
+  if (raw === 'validation' || raw === 'run') return 'qaOutput';
+  return undefined;
+}
+
+export const createUiShellSlice: StateCreator<AppState, [], [], UiShellSlice> = (set) => ({
   leftDockCollapsed: false,
   rightDockCollapsed: false,
-  rightTab: 'properties',
 
   toggleLeftDock: () => set((s) => ({ leftDockCollapsed: !s.leftDockCollapsed })),
   toggleRightDock: () => set((s) => ({ rightDockCollapsed: !s.rightDockCollapsed })),
-  setRightTab: (tab: RightDockTab) => set({ rightTab: tab }),
   expandLeftDock: () => set({ leftDockCollapsed: false }),
   expandRightDock: () => set({ rightDockCollapsed: false }),
 });
 
-export function loadUiShellFromStorage(projectId: string): Partial<Pick<AppState, 'leftDockCollapsed' | 'rightDockCollapsed' | 'rightTab' | 'sidebarTab'>> {
+export function loadUiShellFromStorage(
+  projectId: string,
+): Partial<
+  Pick<AppState, 'leftDockCollapsed' | 'rightDockCollapsed' | 'sidebarTab' | 'editorWorkMode' | 'displayUnit'>
+> {
   try {
     const raw = localStorage.getItem(`pn-ui-shell-${projectId}`);
     if (!raw) return {};
     const o = JSON.parse(raw) as Record<string, unknown>;
-    const rightTab = o.rightTab as RightDockTab | undefined;
-    const sidebarTab = o.sidebarTab as 'materials' | 'validation' | 'run' | undefined;
+    const sidebarTab = migrateLeftTaskTab(o.sidebarTab);
+    const mode = o.editorWorkMode;
+    const editorWorkMode =
+      mode === 'resources' || mode === 'template' || mode === 'layout' || mode === 'output' ? mode : undefined;
+    const displayUnit = isDisplayLengthUnit(o.displayUnit) ? o.displayUnit : undefined;
     return {
       leftDockCollapsed: Boolean(o.leftDockCollapsed),
       rightDockCollapsed: Boolean(o.rightDockCollapsed),
-      ...(rightTab === 'properties' || rightTab === 'project' || rightTab === 'canvas' ? { rightTab } : {}),
-      ...(sidebarTab === 'materials' || sidebarTab === 'validation' || sidebarTab === 'run' ? { sidebarTab } : {}),
+      ...(sidebarTab ? { sidebarTab } : {}),
+      ...(editorWorkMode ? { editorWorkMode } : {}),
+      ...(displayUnit ? { displayUnit } : {}),
     };
   } catch {
     return {};
@@ -34,10 +47,17 @@ export function loadUiShellFromStorage(projectId: string): Partial<Pick<AppState
 
 export function persistUiShellToStorage(state: AppState): void {
   try {
-    const { currentProjectId, leftDockCollapsed, rightDockCollapsed, rightTab, sidebarTab } = state;
+    const {
+      currentProjectId,
+      leftDockCollapsed,
+      rightDockCollapsed,
+      sidebarTab,
+      editorWorkMode,
+      displayUnit,
+    } = state;
     localStorage.setItem(
       `pn-ui-shell-${currentProjectId}`,
-      JSON.stringify({ leftDockCollapsed, rightDockCollapsed, rightTab, sidebarTab }),
+      JSON.stringify({ leftDockCollapsed, rightDockCollapsed, sidebarTab, editorWorkMode, displayUnit }),
     );
   } catch {
     /* ignore */

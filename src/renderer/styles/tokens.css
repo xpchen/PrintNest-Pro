@@ -1,34 +1,52 @@
-/* PrintNest v1.1 — 设计令牌（语义色与壳层尺寸） */
+/* PrintNest Pro v2 — 工业深色专业风 · 设计令牌 */
 :root {
   --shell-topbar-h: 48px;
-  --shell-contextbar-h: 44px;
+  --shell-contextbar-h: 0px;
   --shell-statusbar-h: 28px;
   --dock-rail-w: 52px;
-  --dock-left-expanded-w: 320px;
-  --dock-right-expanded-w: 340px;
+  --dock-left-expanded-w: 328px;
+  --dock-right-expanded-w: 300px;
 
-  --surface-base: #181a24;
-  --surface-panel: #222536;
-  --surface-elevated: #2a2f44;
-  --surface-canvas: #31354a;
+  --surface-base: #0f1115;
+  --surface-panel: #161a20;
+  --surface-elevated: #1e232b;
+  --surface-canvas: #252b34;
 
-  --text-primary: rgba(255, 255, 255, 0.92);
-  --text-secondary: rgba(255, 255, 255, 0.62);
-  --border-default: rgba(255, 255, 255, 0.1);
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.52);
+  --text-muted: rgba(255, 255, 255, 0.38);
+  --border-default: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.14);
 
-  --accent-primary: #6f6dff;
-  --accent-soft: rgba(111, 109, 255, 0.18);
+  --accent-primary: #3a9bc7;
+  --accent-hover: #4eb0db;
+  --accent-soft: rgba(58, 155, 199, 0.14);
+  --accent-muted: rgba(58, 155, 199, 0.08);
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --success: #5a9e7a;
+  --warning: #c9a43a;
+  --danger: #c75c5c;
+  --danger-soft: rgba(199, 92, 92, 0.12);
 
-  --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --shadow-panel: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --shadow-float: 0 10px 32px rgba(0, 0, 0, 0.55);
+
+  --control-h: 30px;
+  --control-h-sm: 26px;
 
   --z-dock-panel: 10;
   --z-dock-peek: 40;
-  --z-overview: 50;
+  --z-overview: 15;
   --z-dropdown: 100;
   --z-modal: 200;
+
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-md: 12px;
+  --text-base: 13px;
+  --text-lg: 14px;
 }

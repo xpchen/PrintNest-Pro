@@ -1,26 +1,28 @@
-/* 画布舞台与鹰眼 */
+/* 画布舞台与鹰眼（嵌入侧栏，非浮层） */
 .canvas-viewport--stage {
   background: var(--surface-canvas);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-.overview-card {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  width: 216px;
+.overview-card--integrated {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 10px;
-  border-radius: 8px;
-  background: rgba(24, 26, 36, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(8px);
+  border: none;
+  border-radius: 0;
+  background: var(--surface-panel);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .overview-card__canvas-wrap {
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   margin-bottom: 8px;
+  border: 1px solid var(--border-default);
 }
 
 .overview-card__seg {
@@ -31,20 +33,20 @@
 }
 
 .overview-card__seg-meta {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .overview-card__seg-input {
   width: 56px;
   height: 24px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   padding: 2px 4px;
 }
 
 .overview-card__hint {
   margin-top: 6px;
-  font-size: 9px;
-  color: var(--text-secondary);
-  line-height: 1.3;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.35;
 }

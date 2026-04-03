@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { SerializedEditorState } from '../../../shared/persistence/editorState';
 import { showToast } from '../../utils/toast';
+import { formatPairMm } from '../../utils/lengthDisplay';
 
 const LAST_KEY = 'printnest:lastProjectId';
 
@@ -33,6 +34,7 @@ export const ProjectHome: React.FC<ProjectHomeProps> = ({ onEnteredEditor }) => 
   const [idFallback, setIdFallback] = useState<string[]>([]);
   const hydrateFromEditorState = useAppStore((s) => s.hydrateFromEditorState);
   const setCurrentProjectId = useAppStore((s) => s.setCurrentProjectId);
+  const displayUnit = useAppStore((s) => s.displayUnit);
 
   const refreshList = useCallback(async () => {
     const api = window.electronAPI;
@@ -139,6 +141,18 @@ export const ProjectHome: React.FC<ProjectHomeProps> = ({ onEnteredEditor }) => 
             打开最近
           </button>
         </div>
+        <div className="project-home-routes" aria-label="扩展入口占位">
+          <span className="project-home-routes__label">进入生产后</span>
+          <span className="project-home-routes__chip" title="在顶栏「模板」中打开">
+            行业模板
+          </span>
+          <span className="project-home-routes__chip" title="顶栏导入 Excel 或左侧「资源与数据」">
+            Excel / CSV 数据
+          </span>
+          <span className="project-home-routes__chip" title="顶栏「输出」输出中心">
+            输出中心
+          </span>
+        </div>
         <h2 className="project-home-list-title">最近项目</h2>
         {!hasList ? (
           <p className="project-home-empty">暂无项目，请先新建</p>
@@ -150,7 +164,7 @@ export const ProjectHome: React.FC<ProjectHomeProps> = ({ onEnteredEditor }) => 
                   <span className="project-home-card-name">{s.name}</span>
                   <span className="project-home-card-id">{s.id}</span>
                   <span className="project-home-card-meta">
-                    画布 {s.canvasW}×{s.canvasH} mm · 落位 {s.placementCount}
+                    画布 {formatPairMm(s.canvasW, s.canvasH, displayUnit)} · 落位 {s.placementCount}
                     {s.lastRunUtil != null && (
                       <> · 最近 run {(s.lastRunUtil * 100).toFixed(1)}%</>
                     )}

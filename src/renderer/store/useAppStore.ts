@@ -17,5 +17,5 @@ export const useAppStore = create<AppState>()((...args) => ({
   ...createUiShellSlice(...args),
 }));
 
-export type { AppState, AlignMode } from './types';
+export type { AppState, AlignMode, EditorWorkMode, LeftTaskTab } from './types';
 export { genId, nextColor } from './itemUtils';

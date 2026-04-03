@@ -55,14 +55,14 @@ export const EditorChromeProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [showModal, setShowModal] = useState(false);
   const [modalPreviews, setModalPreviews] = useState<ModalPreview[]>([]);
   const [modalDpi, setModalDpi] = useState(DEFAULT_IMPORT_DPI);
-  const [modalQty, setModalQty] = useState(5);
+  const [modalQty, setModalQty] = useState(1);
   const modalFileRef = useRef<HTMLInputElement>(null);
 
   const openModal = useCallback(() => {
     setShowModal(true);
     setModalPreviews([]);
     setModalDpi(DEFAULT_IMPORT_DPI);
-    setModalQty(5);
+    setModalQty(1);
   }, []);
 
   const processModalFiles = useCallback(

@@ -129,15 +129,13 @@
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .dock-rail__btn:hover {
-  background: var(--accent-soft);
+  background: var(--accent-muted);
   color: var(--text-primary);
 }
 
@@ -145,6 +143,17 @@
   border-color: var(--accent-primary);
   color: var(--accent-primary);
   background: var(--accent-soft);
+}
+
+.dock-rail__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.dock-rail__icon svg {
+  display: block;
 }
 
 .dock-rail__badge {

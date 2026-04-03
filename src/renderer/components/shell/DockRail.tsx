@@ -4,8 +4,9 @@ export type DockSide = 'left' | 'right';
 
 export interface DockRailTab {
   id: string;
+  /** 完整名称，用于 tooltip 与 aria */
   label: string;
-  short: string;
+  icon: React.ReactNode;
   badge?: number;
 }
 
@@ -16,6 +17,8 @@ interface DockRailProps {
   onSelect: (id: string) => void;
   onToggleCollapse: () => void;
   collapsed: boolean;
+  /** 右侧栏仅折叠时可为 true：不触发切换，只展示图标 */
+  selectionLocked?: boolean;
 }
 
 export const DockRail: React.FC<DockRailProps> = ({
@@ -25,18 +28,25 @@ export const DockRail: React.FC<DockRailProps> = ({
   onSelect,
   onToggleCollapse,
   collapsed,
+  selectionLocked,
 }) => {
   return (
-    <nav className={`dock-rail dock-rail--${side}`} aria-label={side === 'left' ? '左侧面板' : '右侧面板'}>
+    <nav className={`dock-rail dock-rail--${side}`} aria-label={side === 'left' ? '左侧任务栏' : '右侧属性栏'}>
       {tabs.map((t) => (
         <button
           key={t.id}
           type="button"
           className={`dock-rail__btn${activeId === t.id ? ' is-active' : ''}`}
           title={t.label}
-          onClick={() => onSelect(t.id)}
+          aria-label={t.label}
+          aria-current={activeId === t.id ? 'true' : undefined}
+          onClick={() => {
+            if (!selectionLocked) onSelect(t.id);
+          }}
         >
-          <span className="dock-rail__short">{t.short}</span>
+          <span className="dock-rail__icon" aria-hidden>
+            {t.icon}
+          </span>
           {t.badge != null && t.badge > 0 ? <span className="dock-rail__badge">{t.badge > 99 ? '99+' : t.badge}</span> : null}
         </button>
       ))}
@@ -44,6 +54,7 @@ export const DockRail: React.FC<DockRailProps> = ({
         type="button"
         className="dock-rail__pin"
         title={collapsed ? '展开面板' : '收起为图标栏'}
+        aria-label={collapsed ? '展开面板' : '收起为图标栏'}
         onClick={onToggleCollapse}
       >
         {collapsed ? '»' : '«'}

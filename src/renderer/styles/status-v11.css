@@ -8,3 +8,12 @@
 .statusbar--v11 .statusbar-item {
   padding: 0 10px;
 }
+
+.statusbar--v11 .statusbar-item--mono {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.statusbar--v11 .statusbar-item--warn {
+  color: var(--warning);
+}

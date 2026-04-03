@@ -5,6 +5,7 @@
 import React from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { showToast } from '../utils/toast';
+import { formatLengthMm } from '../utils/lengthDisplay';
 
 export const Inspector: React.FC = () => {
   const {
@@ -12,6 +13,7 @@ export const Inspector: React.FC = () => {
     toggleLock, batchLock, deleteSelected, setSelectedIds,
     updatePlacement, updateItem, duplicateItem, alignSelected,
     focusRectInCanvas,
+    displayUnit,
   } = useAppStore();
 
   const currentCanvas = result?.canvases[activeCanvasIndex];
@@ -163,11 +165,11 @@ export const Inspector: React.FC = () => {
         <div className="inspector-section-title">尺寸（画布上为排版占用，含出血/间距）</div>
         <div className="inspector-row">
           <span className="inspector-label">W</span>
-          <span style={{ fontSize: 13 }}>{Math.round(sel.width)} mm</span>
+          <span style={{ fontSize: 13 }}>{formatLengthMm(sel.width, displayUnit)}</span>
         </div>
         <div className="inspector-row">
           <span className="inspector-label">H</span>
-          <span style={{ fontSize: 13 }}>{Math.round(sel.height)} mm</span>
+          <span style={{ fontSize: 13 }}>{formatLengthMm(sel.height, displayUnit)}</span>
         </div>
         <div className="inspector-row">
           <span className="inspector-label" style={{ width: 50 }}>旋转</span>

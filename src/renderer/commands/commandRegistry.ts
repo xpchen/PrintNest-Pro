@@ -103,9 +103,9 @@ export function dispatchAppCommand(id: string, _payload?: unknown): void {
       break;
     case AppCommand.VIEW_OPEN_RUN_PANEL:
       get().setRunPanelVisible(true);
-      get().setSidebarTab('run');
+      get().setSidebarTab('qaOutput');
       get().expandLeftDock();
-      showToast('已切换到左侧「Run」');
+      showToast('已切换到左侧「校验与输出」');
       break;
 
     case AppCommand.LAYOUT_RUN:

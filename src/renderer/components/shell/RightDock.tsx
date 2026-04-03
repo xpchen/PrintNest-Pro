@@ -1,16 +1,16 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import type { RightDockTab } from '../../store/types';
 import { DockRail } from './DockRail';
 import { Inspector } from '../Inspector';
-import { ProjectSummaryPanel } from '../panels/ProjectSummaryPanel';
-import { CanvasSummaryPanel } from '../panels/CanvasSummaryPanel';
+import { TaskSummaryInspector } from './TaskSummaryInspector';
+import { IconProperties } from './ShellDockIcons';
 
+/**
+ * 右侧属性栏：不收起态悬停自动展开（避免鼠标移向窗口右缘时面板误弹出），仅点击轨上「展开」打开。
+ */
 export const RightDock: React.FC = () => {
   const rightDockCollapsed = useAppStore((s) => s.rightDockCollapsed);
   const toggleRightDock = useAppStore((s) => s.toggleRightDock);
-  const rightTab = useAppStore((s) => s.rightTab);
-  const setRightTab = useAppStore((s) => s.setRightTab);
   const selectedIds = useAppStore((s) => s.selectedIds);
   const result = useAppStore((s) => s.result);
   const activeCanvasIndex = useAppStore((s) => s.activeCanvasIndex);
@@ -18,71 +18,28 @@ export const RightDock: React.FC = () => {
   const currentCanvas = result?.canvases[activeCanvasIndex];
   const selCount = currentCanvas ? currentCanvas.placements.filter((p) => selectedIds.includes(p.id)).length : 0;
 
-  const [peek, setPeek] = useState(false);
-  const onRailEnter = useCallback(() => {
-    if (rightDockCollapsed) setPeek(true);
-  }, [rightDockCollapsed]);
-  const onRailLeave = useCallback(() => {
-    setPeek(false);
-  }, []);
+  const showPanel = !rightDockCollapsed;
 
-  const tabs = [
-    { id: 'properties' as const, label: '属性', short: '性', badge: selCount > 0 ? selCount : undefined },
-    { id: 'project' as const, label: '项目', short: '项', badge: undefined },
-    { id: 'canvas' as const, label: '画布', short: '布', badge: undefined },
-  ];
-
-  const expanded = !rightDockCollapsed || peek;
-  const showPanel = expanded;
+  const tabs = [{ id: 'properties', label: '属性', icon: <IconProperties />, badge: selCount > 0 ? selCount : undefined }];
 
   return (
-    <aside
-      className={`right-dock${rightDockCollapsed && !peek ? ' is-collapsed' : ''}${peek && rightDockCollapsed ? ' is-peek' : ''}`}
-      onMouseLeave={() => {
-        if (rightDockCollapsed) setPeek(false);
-      }}
-    >
+    <aside className={`right-dock${rightDockCollapsed ? ' is-collapsed' : ''}`}>
       <div className="right-dock__inner">
         {showPanel && (
           <div className="right-dock__panel pn-z-dock-panel">
-            {rightTab === 'properties' &&
-              (selCount > 0 ? (
-                <Inspector />
-              ) : (
-                <div className="inspector dock-inspector-placeholder">
-                  <div className="inspector-title">概览</div>
-                  <ProjectSummaryPanel />
-                  <div className="dock-inspector-placeholder__sep" />
-                  <CanvasSummaryPanel />
-                  <div className="panel-summary__hint" style={{ padding: '12px 16px' }}>
-                    选中画布上的对象后，在此查看与编辑属性。
-                  </div>
-                </div>
-              ))}
-            {rightTab === 'project' && (
-              <div className="inspector">
-                <div className="inspector-title">项目摘要</div>
-                <ProjectSummaryPanel />
-              </div>
-            )}
-            {rightTab === 'canvas' && (
-              <div className="inspector">
-                <div className="inspector-title">当前画布</div>
-                <CanvasSummaryPanel />
-              </div>
-            )}
+            <div className="right-dock__panel-head">属性</div>
+            {selCount > 0 ? <Inspector /> : <TaskSummaryInspector />}
           </div>
         )}
-        <div onMouseEnter={onRailEnter} onMouseLeave={onRailLeave}>
-          <DockRail
-            side="right"
-            tabs={tabs}
-            activeId={rightTab}
-            onSelect={(id) => setRightTab(id as RightDockTab)}
-            collapsed={rightDockCollapsed}
-            onToggleCollapse={toggleRightDock}
-          />
-        </div>
+        <DockRail
+          side="right"
+          tabs={tabs}
+          activeId="properties"
+          onSelect={() => undefined}
+          collapsed={rightDockCollapsed}
+          onToggleCollapse={toggleRightDock}
+          selectionLocked
+        />
       </div>
     </aside>
   );

@@ -1,13 +1,24 @@
 /**
- * 底部状态栏 — v1.1 轻量：利用率、校验态、进度、版本
+ * 底部状态栏 — 利用率、校验、指针、缩放、进度
  */
 import React from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { formatPointerPairMm } from '../utils/lengthDisplay';
 
 export const StatusBar: React.FC = () => {
-  const { result, isComputing, layoutProgress, cancelLayoutJob } = useAppStore();
+  const {
+    result,
+    isComputing,
+    layoutProgress,
+    cancelLayoutJob,
+    zoom,
+    canvasPointerMm,
+    editorWorkMode,
+    displayUnit,
+  } = useAppStore();
 
   const utilization = result?.totalUtilization ?? 0;
+  const unplacedN = result?.unplaced?.length ?? 0;
   const val = result?.validation;
   const errN = val?.issues.filter((i) => i.severity === 'error').length ?? 0;
   const warnN = val?.issues.filter((i) => i.severity !== 'error').length ?? 0;
@@ -18,6 +29,11 @@ export const StatusBar: React.FC = () => {
           .map((i) => `[${i.severity === 'error' ? '错误' : '提示'}] ${i.message}`)
           .join('\n')
       : '';
+
+  const pointerLabel =
+    canvasPointerMm != null
+      ? formatPointerPairMm(canvasPointerMm.x, canvasPointerMm.y, displayUnit)
+      : '—';
 
   return (
     <div className="statusbar statusbar--v11">
@@ -31,6 +47,11 @@ export const StatusBar: React.FC = () => {
         />
         利用率 {(utilization * 100).toFixed(1)}%
       </div>
+      {result && unplacedN > 0 && (
+        <div className="statusbar-item statusbar-item--warn" title="未排入画布的对象数量">
+          未排入 {unplacedN}
+        </div>
+      )}
       {result && val && (errN > 0 || warnN > 0) && (
         <div className="statusbar-item" title={valTitle} style={{ cursor: valTitle ? 'help' : undefined }}>
           校验:
@@ -46,6 +67,14 @@ export const StatusBar: React.FC = () => {
         </div>
       )}
       <div style={{ flex: 1 }} />
+      {(editorWorkMode === 'layout' || editorWorkMode === 'resources') && (
+        <>
+          <div className="statusbar-item statusbar-item--mono" title="画布坐标（毫米）">
+            指针 {pointerLabel}
+          </div>
+          <div className="statusbar-item statusbar-item--mono">缩放 {Math.round(zoom * 100)}%</div>
+        </>
+      )}
       {isComputing && (
         <div className="statusbar-item" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>排版 {Math.round(layoutProgress)}%</span>
@@ -54,7 +83,7 @@ export const StatusBar: React.FC = () => {
           </button>
         </div>
       )}
-      <div className="statusbar-item">PrintNest Pro v1.1</div>
+      <div className="statusbar-item">PrintNest Pro v2</div>
     </div>
   );
 };

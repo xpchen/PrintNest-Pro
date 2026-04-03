@@ -96,7 +96,7 @@ export function createApplicationMenu(getWindow: () => BrowserWindow | null): vo
       { label: '跳到卷材中部', click: cmd(AppCommand.VIEW_SEGMENT_MID) },
       { label: '跳到卷材尾部', click: cmd(AppCommand.VIEW_SEGMENT_TAIL) },
       { type: 'separator' },
-      { label: '打开 Run 面板', click: cmd(AppCommand.VIEW_OPEN_RUN_PANEL) },
+      { label: '打开校验与输出', click: cmd(AppCommand.VIEW_OPEN_RUN_PANEL) },
     ],
   });
 

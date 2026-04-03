@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { formatLengthMm, formatPairMm } from '../../utils/lengthDisplay';
 
 export const CanvasSummaryPanel: React.FC = () => {
   const config = useAppStore((s) => s.config);
@@ -7,6 +8,7 @@ export const CanvasSummaryPanel: React.FC = () => {
   const activeCanvasIndex = useAppStore((s) => s.activeCanvasIndex);
   const segmentSizeMm = useAppStore((s) => s.segmentSizeMm);
   const activeSegmentIndex = useAppStore((s) => s.activeSegmentIndex);
+  const displayUnit = useAppStore((s) => s.displayUnit);
 
   const cur = result?.canvases[activeCanvasIndex];
   const u = cur?.utilization ?? 0;
@@ -19,7 +21,7 @@ export const CanvasSummaryPanel: React.FC = () => {
       <div className="panel-summary__block">
         <div className="panel-summary__h">画布尺寸</div>
         <div className="panel-summary__v">
-          {config.canvas.width} × {config.canvas.height} mm
+          {formatPairMm(config.canvas.width, config.canvas.height, displayUnit)}
         </div>
       </div>
       <div className="panel-summary__block">
@@ -29,13 +31,14 @@ export const CanvasSummaryPanel: React.FC = () => {
       <div className="panel-summary__block">
         <div className="panel-summary__h">间距 / 出血 / 安全边</div>
         <div className="panel-summary__v">
-          {config.globalSpacing} / {config.globalBleed} / {config.edgeSafeMm ?? 0} mm
+          {formatLengthMm(config.globalSpacing, displayUnit)} / {formatLengthMm(config.globalBleed, displayUnit)} /{' '}
+          {formatLengthMm(config.edgeSafeMm ?? 0, displayUnit)}
         </div>
       </div>
       <div className="panel-summary__block">
         <div className="panel-summary__h">分段</div>
         <div className="panel-summary__v">
-          段 {activeSegmentIndex + 1} / {totalSegs}（每段 {seg} mm）
+          段 {activeSegmentIndex + 1} / {totalSegs}（每段 {formatLengthMm(seg, displayUnit)}）
         </div>
       </div>
     </div>

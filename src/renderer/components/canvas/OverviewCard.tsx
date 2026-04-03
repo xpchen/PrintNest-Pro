@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { formatPointerPairMm } from '../../utils/lengthDisplay';
 
 const MW = 200;
 const MH = 132;
@@ -22,6 +23,7 @@ export const OverviewCard: React.FC = () => {
   const jumpViewHead = useAppStore((s) => s.jumpViewHead);
   const jumpViewMid = useAppStore((s) => s.jumpViewMid);
   const jumpViewTail = useAppStore((s) => s.jumpViewTail);
+  const displayUnit = useAppStore((s) => s.displayUnit);
 
   const canvasW = config.canvas.width;
   const canvasH = config.canvas.height;
@@ -29,7 +31,15 @@ export const OverviewCard: React.FC = () => {
   const seg = Math.max(100, segmentSizeMm);
   const totalSegs = Math.max(1, Math.ceil(canvasH / seg));
 
-  const lastClickRef = useRef(0);
+  /** 双击时取消延迟，避免「先跳视口再适应」的抖动 */
+  const singleClickTimerRef = useRef<number | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      if (singleClickTimerRef.current !== undefined) window.clearTimeout(singleClickTimerRef.current);
+    },
+    [],
+  );
 
   const draw = useCallback(() => {
     const c = ref.current;
@@ -38,24 +48,24 @@ export const OverviewCard: React.FC = () => {
     if (!ctx) return;
     c.width = MW;
     c.height = MH;
-    ctx.fillStyle = 'rgba(24,26,36,0.92)';
+    ctx.fillStyle = 'rgba(22,26,32,0.98)';
     ctx.fillRect(0, 0, MW, MH);
     const scale = Math.min(MW / canvasW, MH / canvasH) * 0.88;
     const ox = (MW - canvasW * scale) / 2;
     const oy = (MH - canvasH * scale) / 2;
-    ctx.fillStyle = 'rgba(42,47,68,0.95)';
+    ctx.fillStyle = 'rgba(36,42,52,0.98)';
     ctx.fillRect(ox, oy, canvasW * scale, canvasH * scale);
-    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
     ctx.strokeRect(ox, oy, canvasW * scale, canvasH * scale);
 
     const y0 = activeSegmentIndex * seg;
     if (y0 < canvasH) {
-      ctx.fillStyle = 'rgba(111,109,255,0.12)';
+      ctx.fillStyle = 'rgba(58,155,199,0.12)';
       ctx.fillRect(ox, oy + y0 * scale, canvasW * scale, Math.min(seg, canvasH - y0) * scale);
     }
 
     if (cur) {
-      ctx.fillStyle = 'rgba(111,109,255,0.22)';
+      ctx.fillStyle = 'rgba(58,155,199,0.2)';
       for (const p of cur.placements) {
         ctx.fillRect(
           ox + p.x * scale,
@@ -71,7 +81,7 @@ export const OverviewCard: React.FC = () => {
       const vt = -panOffset.y / zoom;
       const vwMm = vw / zoom;
       const vhMm = vh / zoom;
-      ctx.strokeStyle = 'rgba(111,109,255,0.95)';
+      ctx.strokeStyle = 'rgba(58,155,199,0.9)';
       ctx.lineWidth = 1.5;
       ctx.strokeRect(ox + vl * scale, oy + vt * scale, vwMm * scale, vhMm * scale);
     }
@@ -83,7 +93,7 @@ export const OverviewCard: React.FC = () => {
 
   const [hoverMm, setHoverMm] = useState<string | null>(null);
 
-  const onCanvasClick = (e: React.MouseEvent) => {
+  const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const c = ref.current;
     if (!c) return;
     const rect = c.getBoundingClientRect();
@@ -96,17 +106,24 @@ export const OverviewCard: React.FC = () => {
     const cyMm = (my - boxOy) / scale;
     if (cxMm < 0 || cyMm < 0 || cxMm > canvasW || cyMm > canvasH) return;
 
-    const now = performance.now();
-    if (now - lastClickRef.current < 320) {
+    if (e.detail === 2) {
+      if (singleClickTimerRef.current !== undefined) {
+        window.clearTimeout(singleClickTimerRef.current);
+        singleClickTimerRef.current = undefined;
+      }
       applyViewFitWidth();
-      lastClickRef.current = 0;
       return;
     }
-    lastClickRef.current = now;
-    focusRectInCanvas(
-      { x: cxMm - 80, y: cyMm - 80, width: 160, height: 160 },
-      { mode: 'center', paddingMm: 4 },
-    );
+    if (e.detail !== 1) return;
+
+    if (singleClickTimerRef.current !== undefined) window.clearTimeout(singleClickTimerRef.current);
+    singleClickTimerRef.current = window.setTimeout(() => {
+      singleClickTimerRef.current = undefined;
+      focusRectInCanvas(
+        { x: cxMm - 80, y: cyMm - 80, width: 160, height: 160 },
+        { mode: 'center', paddingMm: 4 },
+      );
+    }, 260);
   };
 
   const onMouseMove = (e: React.MouseEvent) => {
@@ -124,13 +141,11 @@ export const OverviewCard: React.FC = () => {
       setHoverMm(null);
       return;
     }
-    setHoverMm(`视口中心约 ${cxMm.toFixed(0)}, ${cyMm.toFixed(0)} mm`);
+    setHoverMm(`视口中心约 ${formatPointerPairMm(cxMm, cyMm, displayUnit)}`);
   };
 
-  if (!overviewVisible) return null;
-
   return (
-    <div className="overview-card pn-z-overview" title={hoverMm ?? undefined}>
+    <div className="overview-card overview-card--integrated" title={hoverMm ?? undefined}>
       <div className="overview-card__canvas-wrap">
         <canvas
           ref={ref}
@@ -178,10 +193,10 @@ export const OverviewCard: React.FC = () => {
           step={100}
           value={segmentSizeMm}
           onChange={(e) => setSegmentSizeMm(Number(e.target.value) || 1000)}
-          title="分段 mm"
+          title="分段长度（内部 mm）"
         />
       </div>
-      <div className="overview-card__hint">双击画布：适应宽度 · 单击：跳转</div>
+      <div className="overview-card__hint">双击：适应宽度 · 单击：跳转视口（略延迟以区分双击）</div>
     </div>
   );
 };

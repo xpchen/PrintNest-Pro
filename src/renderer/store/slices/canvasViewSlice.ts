@@ -14,6 +14,7 @@ export const createCanvasViewSlice: StateCreator<AppState, [], [], CanvasViewSli
   showRuler: true,
   showSafeMargin: true,
   snapMm: 5,
+  displayUnit: 'mm',
 
   viewMode: 'custom' as CanvasViewMode,
   panOffset: { x: 30, y: 10 },
@@ -27,7 +28,9 @@ export const createCanvasViewSlice: StateCreator<AppState, [], [], CanvasViewSli
   importModalNonce: 0,
   excelImportNonce: 0,
   runPanelVisible: false,
-  sidebarTab: 'materials',
+  sidebarTab: 'resources',
+  editorWorkMode: 'layout',
+  canvasPointerMm: null,
 
   setActiveCanvas: (index) => set({ activeCanvasIndex: index }),
 
@@ -37,6 +40,7 @@ export const createCanvasViewSlice: StateCreator<AppState, [], [], CanvasViewSli
   setShowRuler: (v) => set({ showRuler: v }),
   setShowSafeMargin: (v) => set({ showSafeMargin: v }),
   setSnapMm: (mm) => set({ snapMm: Math.max(1, Math.min(50, mm)) }),
+  setDisplayUnit: (displayUnit) => set({ displayUnit }),
 
   setPanOffset: (p) => set({ panOffset: p, viewMode: 'custom' }),
 
@@ -56,6 +60,8 @@ export const createCanvasViewSlice: StateCreator<AppState, [], [], CanvasViewSli
   toggleRunPanel: () => set((s) => ({ runPanelVisible: !s.runPanelVisible })),
   setRunPanelVisible: (v) => set({ runPanelVisible: v }),
   setSidebarTab: (t) => set({ sidebarTab: t }),
+  setEditorWorkMode: (m) => set({ editorWorkMode: m }),
+  setCanvasPointerMm: (p) => set({ canvasPointerMm: p }),
 
   requestImportImages: () => set((s) => ({ importModalNonce: s.importModalNonce + 1 })),
   requestImportExcel: () => set((s) => ({ excelImportNonce: s.excelImportNonce + 1 })),

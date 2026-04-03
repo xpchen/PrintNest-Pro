@@ -20,33 +20,28 @@
   --text-13: 13px;
   --text-14: 14px;
   --text-16: 16px;
-  --color-surface: #1e1e2e;
-  --color-surface-raised: #2a2a3e;
-  --color-border: #404060;
-  --color-text: #e0e0f0;
-  --color-text-muted: #a0a0c0;
-  --color-accent: #6c63ff;
-  --color-success: #4ecdc4;
-  --color-warning: #ffeaa7;
-  --color-danger: #ff6b6b;
+  --color-surface: var(--surface-panel);
+  --color-surface-raised: var(--surface-elevated);
+  --color-border: var(--border-default);
+  --color-text: var(--text-primary);
+  --color-text-muted: var(--text-secondary);
+  --color-accent: var(--accent-primary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
 
   --toolbar-height: 64px;
   --sidebar-width: 260px;
   --inspector-width: 300px;
   --statusbar-height: 28px;
-  --bg-primary: #1e1e2e;
-  --bg-secondary: #2a2a3e;
-  --bg-tertiary: #353550;
-  --bg-canvas: #3a3a50;
-  --text-primary: #e0e0f0;
-  --text-secondary: #a0a0c0;
-  --accent: #6c63ff;
-  --accent-hover: #7d75ff;
-  --success: #4ecdc4;
-  --warning: #ffeaa7;
-  --danger: #ff6b6b;
-  --border: #404060;
-  --radius: 6px;
+  --bg-primary: var(--surface-base);
+  --bg-secondary: var(--surface-panel);
+  --bg-tertiary: var(--surface-elevated);
+  --bg-canvas: var(--surface-canvas);
+  --accent: var(--accent-primary);
+  --accent-hover: #4eb0db;
+  --border: var(--border-default);
+  --radius: var(--radius-md);
 }
 
 * {
@@ -83,7 +78,7 @@ body {
   overflow: hidden;
 }
 
-/* Toolbar */
+/* 遗留：旧单层工具栏布局；v2 壳层以 shell.css / AppTopBar 为准，勿在新功能中依赖此类名 */
 .toolbar {
   height: var(--toolbar-height);
   background: var(--bg-secondary);
@@ -392,12 +387,16 @@ body {
   vertical-align: top;
 }
 
-/* Inspector */
+/* Inspector（右侧 dock 内须随容器变窄，禁止固定 300px 盖住折叠轨） */
 .inspector {
-  width: var(--inspector-width);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border);
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
 }
 
@@ -727,7 +726,31 @@ body {
 .project-home-actions {
   display: flex;
   gap: 12px;
-  margin-bottom: 28px;
+  margin-bottom: 16px;
+}
+.project-home-routes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.project-home-routes__label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+.project-home-routes__chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
 }
 .project-home-list-title {
   font-size: 13px;

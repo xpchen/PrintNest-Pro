@@ -1,7 +1,7 @@
 /**
  * 左侧 Run 工作台：列出 layout_runs，支持恢复为新草稿与配置指纹展示。
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { LayoutConfig, LayoutResult } from '../../shared/types';
 import { summarizeLayoutConfigFingerprint } from '../../shared/layoutConfigFingerprint';
 import { useAppStore } from '../store/useAppStore';
@@ -20,6 +20,8 @@ export const RunPanel: React.FC = () => {
   const items = useAppStore((s) => s.items);
   const restoreRunAsNewDraft = useAppStore((s) => s.restoreRunAsNewDraft);
   const lastLayoutRunId = useAppStore((s) => s.lastLayoutRunId);
+  const isComputing = useAppStore((s) => s.isComputing);
+  const wasComputingRef = useRef(isComputing);
 
   const [runs, setRuns] = useState<
     Array<{
@@ -44,9 +46,17 @@ export const RunPanel: React.FC = () => {
     setRuns(list);
   }, [currentProjectId]);
 
+  /** 挂载 / 换项目 / 新 run 落库 id 变化时拉列表 */
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, lastLayoutRunId]);
+
+  useEffect(() => {
+    if (wasComputingRef.current && !isComputing) {
+      void refresh();
+    }
+    wasComputingRef.current = isComputing;
+  }, [isComputing, refresh]);
 
   const exportRunPdf = useCallback(
     async (runId: string) => {
