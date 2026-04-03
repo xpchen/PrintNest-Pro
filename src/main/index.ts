@@ -4,6 +4,7 @@ import { registerFileManagerIPC } from './fileManager';
 import { registerPdfExportIPC } from './pdfExport';
 import { registerExcelImportIPC } from './excelImport';
 import { registerLayoutIpc } from './layoutIpc';
+import { registerExportManagerIPC } from './exportManager';
 import { createApplicationMenu } from './appMenu';
 import { getProjectDirectory } from './projectPaths';
 import { log } from '../shared/logger';
@@ -114,6 +115,7 @@ registerFileManagerIPC();
 registerPdfExportIPC();
 registerExcelImportIPC();
 registerLayoutIpc();
+registerExportManagerIPC();
 
 app.whenReady().then(() => {
   log.app.info('app ready, creating window');

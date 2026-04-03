@@ -75,6 +75,11 @@ declare global {
     onLayoutProgress?: (cb: (p: { phase: string; pct: number }) => void) => () => void;
     onAppCommand?: (cb: (payload: { id: string; payload?: unknown }) => void) => () => void;
     openProjectFolder?: (projectId: string) => Promise<boolean>;
+    listExportProfiles?: (projectId: string) => Promise<unknown[]>;
+    saveExportProfile?: (projectId: string, profile: object) => Promise<boolean>;
+    deleteExportProfile?: (projectId: string, profileId: string) => Promise<boolean>;
+    listExportHistory?: (projectId: string, limit?: number) => Promise<unknown[]>;
+    recordExportHistory?: (projectId: string, entry: object) => Promise<boolean>;
     logError?: (...args: unknown[]) => Promise<void>;
     logWarn?: (...args: unknown[]) => Promise<void>;
   }

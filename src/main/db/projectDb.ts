@@ -65,8 +65,8 @@ function migrate(db: Database.Database): void {
   `);
   const row = db.prepare('SELECT MAX(version) AS v FROM schema_migrations').get() as { v: number | null } | undefined;
   const v = row?.v ?? 0;
-  if (v < 5) {
-    log.db.info('migrating schema', { from: v, to: 5 });
+  if (v < 6) {
+    log.db.info('migrating schema', { from: v, to: 6 });
   }
   if (v < 1) {
     db.exec(LAYOUT_RUNS_V1);
@@ -165,6 +165,34 @@ CREATE TABLE IF NOT EXISTS import_templates (
 );
 `);
     db.prepare('INSERT INTO schema_migrations (version) VALUES (5)').run();
+  }
+  if (v < 6) {
+    db.exec(`
+CREATE TABLE IF NOT EXISTS export_profiles (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  mode TEXT NOT NULL DEFAULT 'production',
+  include_crop_marks INTEGER NOT NULL DEFAULT 1,
+  include_bleed INTEGER NOT NULL DEFAULT 1,
+  safe_margin_mm REAL NOT NULL DEFAULT 0,
+  output_format TEXT NOT NULL DEFAULT 'pdf',
+  naming_pattern TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS export_history (
+  id TEXT PRIMARY KEY NOT NULL,
+  profile_id TEXT,
+  run_id TEXT,
+  output_path TEXT NOT NULL,
+  format TEXT NOT NULL DEFAULT 'pdf',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  file_size_bytes INTEGER,
+  canvas_count INTEGER,
+  status TEXT NOT NULL DEFAULT 'success'
+);
+`);
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (6)').run();
   }
 }
 

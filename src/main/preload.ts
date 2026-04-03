@@ -61,6 +61,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   openProjectFolder: (projectId: string) => ipcRenderer.invoke('shell:openProjectFolder', projectId),
 
+  // 导出管理
+  listExportProfiles: (projectId: string) =>
+    ipcRenderer.invoke('export:listProfiles', projectId),
+  saveExportProfile: (projectId: string, profile: object) =>
+    ipcRenderer.invoke('export:saveProfile', projectId, profile),
+  deleteExportProfile: (projectId: string, profileId: string) =>
+    ipcRenderer.invoke('export:deleteProfile', projectId, profileId),
+  listExportHistory: (projectId: string, limit?: number) =>
+    ipcRenderer.invoke('export:listHistory', projectId, limit),
+  recordExportHistory: (projectId: string, entry: object) =>
+    ipcRenderer.invoke('export:recordHistory', projectId, entry),
+
   // 日志
   logError: (...args: unknown[]) => ipcRenderer.invoke('log:error', ...args),
   logWarn: (...args: unknown[]) => ipcRenderer.invoke('log:warn', ...args),

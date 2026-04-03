@@ -10,6 +10,7 @@ import { ProjectHome, readLastProjectId } from './components/project/ProjectHome
 import { EditorChromeProvider } from './components/shell/EditorChromeContext';
 import { AppTopBar } from './components/shell/AppTopBar';
 import { EditorModePlaceholder } from './components/shell/EditorModePlaceholder';
+import { OutputCenter } from './components/output/OutputCenter';
 import { TemplateWorkspace } from './components/template/TemplateWorkspace';
 import { LeftDock } from './components/shell/LeftDock';
 import { RightDock } from './components/shell/RightDock';
@@ -173,8 +174,10 @@ export const App: React.FC = () => {
               </>
             ) : editorWorkMode === 'template' ? (
               <TemplateWorkspace />
+            ) : editorWorkMode === 'output' ? (
+              <OutputCenter />
             ) : (
-              <EditorModePlaceholder mode="output" />
+              <EditorModePlaceholder mode={editorWorkMode} />
             )}
           </main>
           <RightDock />
