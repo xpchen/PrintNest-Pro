@@ -13,8 +13,10 @@ function saveRunPlacements(db: Database.Database, runId: string, result: LayoutR
   const tx = db.transaction(() => {
     for (let ci = 0; ci < result.canvases.length; ci++) {
       for (const p of result.canvases[ci].placements) {
+        // 每次存储生成唯一 ID，避免不同 run 间 placement ID 冲突
+        const placementDbId = `${runId}_${p.id}`;
         ins.run(
-          p.id,
+          placementDbId,
           runId,
           p.layoutUnitId,
           p.printItemId,

@@ -299,9 +299,7 @@
   flex-wrap: nowrap;
   gap: 8px;
   padding: 6px 10px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  overflow: hidden;
 }
 
 .canvas-header__stale {
@@ -324,11 +322,19 @@
 .canvas-header__tabs {
   flex: 1;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2d35 #0f1115;
+  display: flex;
+  gap: 2px;
 }
 
 .canvas-header__util {
   font-size: 12px;
   color: var(--text-secondary);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .canvas-header__views,
@@ -336,6 +342,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .canvas-header__zoom-label {
@@ -359,7 +366,15 @@
   background: transparent;
   cursor: pointer;
   font: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 12px;
+  color: var(--text-secondary);
 }
+.canvas-tab:hover { background: var(--surface-elevated); }
+.canvas-tab.active { background: var(--accent-primary, var(--accent)); color: #fff; }
 
 .canvas-header__divider {
   width: 1px;
@@ -378,6 +393,7 @@
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .canvas-header__snap-label {
@@ -388,7 +404,14 @@
 .select-shell--compact {
   height: var(--control-h-sm);
   font-size: var(--text-sm);
-  min-width: 72px;
+  min-width: 90px;
+  padding-right: 24px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 8px 5px;
 }
 
 /* 左侧排版任务表单 */

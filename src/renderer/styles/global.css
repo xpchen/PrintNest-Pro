@@ -1301,12 +1301,12 @@ body {
   flex: 1;
   overflow: auto;
   padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: safe center;
 }
 .tpl-canvas__viewport-inner {
-  display: flex;
-  justify-content: center;
-  min-width: 100%;
-  min-height: 100%;
+  flex-shrink: 0;
 }
 .tpl-canvas__svg { flex-shrink: 0; }
 .tpl-canvas__info {
@@ -1539,13 +1539,20 @@ body {
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #0f1115;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: #2a2d35;
   border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3d45;
+}
+::-webkit-scrollbar-corner {
+  background: #0f1115;
 }
 
 /* ── Output Center ── */

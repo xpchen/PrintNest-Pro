@@ -87,10 +87,12 @@ export const TemplateCanvas: React.FC = () => {
   const handleAddElement = useCallback(
     (type: TemplateElement['type']) => {
       if (!currentTemplateId || !tpl) return;
+      // 新元素自动错位，避免完全重叠
+      const offset = (tpl.elements.length % 10) * 8;
       const base = {
         id: newElementId(),
-        xMm: 5,
-        yMm: 5,
+        xMm: 5 + offset,
+        yMm: 5 + offset,
         widthMm: 30,
         heightMm: 12,
         zIndex: tpl.elements.length,

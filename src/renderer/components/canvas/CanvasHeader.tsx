@@ -57,10 +57,6 @@ export const CanvasHeader: React.FC = () => {
           </div>
         )}
 
-        {curU != null && (
-          <span className="canvas-header__util">利用率 {(curU * 100).toFixed(1)}%</span>
-        )}
-
         <div className="canvas-header__views canvas-header__views--tools" onMouseDown={(e) => e.stopPropagation()}>
           <button type="button" className="btn btn-tiny" onClick={() => applyViewFitAll()}>
             全部可见
