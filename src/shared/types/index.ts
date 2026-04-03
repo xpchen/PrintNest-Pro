@@ -184,3 +184,4 @@ export interface LayoutValidationReport {
 
 export * from './domain';
 export * from './template';
+export * from './projectInit';

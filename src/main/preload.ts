@@ -10,7 +10,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 素材文件管理
   importAssets: (projectId: string, srcPaths: string[]) =>
     ipcRenderer.invoke('file:importAssets', projectId, srcPaths),
-  createProject: (projectId: string) => ipcRenderer.invoke('file:createProject', projectId),
+  createProject: (projectId: string, initPayload?: object) =>
+    ipcRenderer.invoke('file:createProject', projectId, initPayload),
   duplicateProject: (srcId: string, destId: string) =>
     ipcRenderer.invoke('file:duplicateProject', srcId, destId),
   saveProject: (projectId: string, data: object) =>

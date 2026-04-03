@@ -17,7 +17,7 @@ declare global {
       extensions: string[],
     ) => Promise<string | undefined>;
     importAssets: (projectId: string, srcPaths: string[]) => Promise<ImportAssetResult[]>;
-    createProject?: (projectId: string) => Promise<boolean>;
+    createProject?: (projectId: string, initPayload?: object) => Promise<boolean>;
     duplicateProject?: (srcId: string, destId: string) => Promise<boolean>;
     saveProject: (projectId: string, data: object) => Promise<boolean>;
     autoSaveProject?: (projectId: string, data: object) => Promise<boolean>;

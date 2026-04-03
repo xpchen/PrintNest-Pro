@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Database } from 'better-sqlite3';
 import type { SerializedEditorState } from '../../../shared/persistence/editorState';
-import type { PrintItem } from '../../../shared/types';
+import type { PrintItem, DataRecord, TemplateDefinition, TemplateInstance } from '../../../shared/types';
 import { getOrOpenProjectDb } from '../projectDb';
 import { getProjectDirectory } from '../../projectPaths';
 
@@ -34,7 +34,7 @@ function readLegacyProjectJson(projectId: string): SerializedEditorState | null 
 function writeJsonSnapshot(projectId: string, state: SerializedEditorState): void {
   const dir = getProjectDirectory(projectId);
   const fp = path.join(dir, 'project.json');
-  const legacy = {
+  const legacy: Record<string, unknown> = {
     projectName: state.projectName,
     items: state.items,
     config: state.config,
@@ -42,7 +42,182 @@ function writeJsonSnapshot(projectId: string, state: SerializedEditorState): voi
     layoutSourceSignature: state.layoutSourceSignature,
     manualEdits: state.manualEdits,
   };
+  if (state.dataRecords?.length) legacy.dataRecords = state.dataRecords;
+  if (state.templates?.length) legacy.templates = state.templates;
+  if (state.templateInstances?.length) legacy.templateInstances = state.templateInstances;
+  if (state.activeTemplateId) legacy.activeTemplateId = state.activeTemplateId;
   fs.writeFileSync(fp, JSON.stringify(legacy, null, 2), 'utf-8');
+}
+
+/* ================================================================== */
+/*  模板域 load/save helpers                                           */
+/* ================================================================== */
+
+function tableExists(db: Database, name: string): boolean {
+  const row = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name) as { 1: number } | undefined;
+  return !!row;
+}
+
+function loadDataRecords(db: Database): DataRecord[] {
+  if (!tableExists(db, 'data_records')) return [];
+  const rows = db.prepare('SELECT * FROM data_records ORDER BY source_row_index ASC').all() as Array<{
+    id: string;
+    source_session_id: string | null;
+    source_row_index: number;
+    fields_json: string;
+    qty: number;
+    source_name: string | null;
+    source_sheet: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  return rows.map((r) => ({
+    id: r.id,
+    sourceSessionId: r.source_session_id ?? undefined,
+    sourceRowIndex: r.source_row_index,
+    fields: JSON.parse(r.fields_json) as Record<string, string>,
+    qty: r.qty,
+    sourceName: r.source_name ?? undefined,
+    sourceSheet: r.source_sheet ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+function loadTemplateDefinitions(db: Database): TemplateDefinition[] {
+  if (!tableExists(db, 'template_definitions')) return [];
+  const rows = db.prepare('SELECT * FROM template_definitions ORDER BY created_at ASC').all() as Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    category: string | null;
+    version: number;
+    status: string;
+    canvas_mode: string;
+    width_mm: number;
+    height_mm: number;
+    elements_json: string;
+    validation_rules_json: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description ?? undefined,
+    category: r.category ?? undefined,
+    version: r.version,
+    status: r.status as TemplateDefinition['status'],
+    canvasMode: r.canvas_mode as TemplateDefinition['canvasMode'],
+    widthMm: r.width_mm,
+    heightMm: r.height_mm,
+    elements: JSON.parse(r.elements_json),
+    validationRules: r.validation_rules_json ? JSON.parse(r.validation_rules_json) : undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+function loadTemplateInstances(db: Database): TemplateInstance[] {
+  if (!tableExists(db, 'template_instances')) return [];
+  const rows = db.prepare('SELECT * FROM template_instances ORDER BY created_at ASC').all() as Array<{
+    id: string;
+    template_id: string;
+    record_id: string;
+    resolved_width_mm: number;
+    resolved_height_mm: number;
+    render_payload_json: string;
+    status: string;
+    validation_errors_json: string | null;
+    resolved_elements_json: string | null;
+    snapshot_hash: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  return rows.map((r) => ({
+    id: r.id,
+    templateId: r.template_id,
+    recordId: r.record_id,
+    resolvedWidthMm: r.resolved_width_mm,
+    resolvedHeightMm: r.resolved_height_mm,
+    renderPayload: JSON.parse(r.render_payload_json),
+    status: r.status as TemplateInstance['status'],
+    validationErrors: r.validation_errors_json ? JSON.parse(r.validation_errors_json) : undefined,
+    resolvedElements: r.resolved_elements_json ? JSON.parse(r.resolved_elements_json) : undefined,
+    snapshotHash: r.snapshot_hash ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+function saveDataRecords(db: Database, records: DataRecord[]): void {
+  db.prepare('DELETE FROM data_records').run();
+  const ins = db.prepare(
+    `INSERT INTO data_records (id, source_session_id, source_row_index, fields_json, qty, source_name, source_sheet, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const r of records) {
+    ins.run(
+      r.id,
+      r.sourceSessionId ?? null,
+      r.sourceRowIndex,
+      JSON.stringify(r.fields),
+      r.qty,
+      r.sourceName ?? null,
+      r.sourceSheet ?? null,
+      r.createdAt,
+      r.updatedAt,
+    );
+  }
+}
+
+function saveTemplateDefinitions(db: Database, templates: TemplateDefinition[]): void {
+  db.prepare('DELETE FROM template_definitions').run();
+  const ins = db.prepare(
+    `INSERT INTO template_definitions (id, name, description, category, version, status, canvas_mode, width_mm, height_mm, elements_json, validation_rules_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const t of templates) {
+    ins.run(
+      t.id,
+      t.name,
+      t.description ?? null,
+      t.category ?? null,
+      t.version,
+      t.status,
+      t.canvasMode,
+      t.widthMm,
+      t.heightMm,
+      JSON.stringify(t.elements),
+      t.validationRules ? JSON.stringify(t.validationRules) : null,
+      t.createdAt,
+      t.updatedAt,
+    );
+  }
+}
+
+function saveTemplateInstances(db: Database, instances: TemplateInstance[]): void {
+  db.prepare('DELETE FROM template_instances').run();
+  const ins = db.prepare(
+    `INSERT INTO template_instances (id, template_id, record_id, resolved_width_mm, resolved_height_mm, render_payload_json, status, validation_errors_json, resolved_elements_json, snapshot_hash, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const i of instances) {
+    ins.run(
+      i.id,
+      i.templateId,
+      i.recordId,
+      i.resolvedWidthMm,
+      i.resolvedHeightMm,
+      JSON.stringify(i.renderPayload),
+      i.status,
+      i.validationErrors ? JSON.stringify(i.validationErrors) : null,
+      i.resolvedElements ? JSON.stringify(i.resolvedElements) : null,
+      i.snapshotHash ?? null,
+      i.createdAt,
+      i.updatedAt,
+    );
+  }
 }
 
 export function loadEditorState(projectId: string): SerializedEditorState | null {
@@ -120,6 +295,13 @@ export function loadEditorState(projectId: string): SerializedEditorState | null
     }
   }
 
+  // ── 模板域：data_records ──
+  const dataRecords = loadDataRecords(db);
+  // ── 模板域：template_definitions ──
+  const templates = loadTemplateDefinitions(db);
+  // ── 模板域：template_instances ──
+  const templateInstances = loadTemplateInstances(db);
+
   return {
     projectName: row.name,
     config,
@@ -127,6 +309,9 @@ export function loadEditorState(projectId: string): SerializedEditorState | null
     result,
     layoutSourceSignature: row.layout_source_signature,
     manualEdits,
+    dataRecords: dataRecords.length ? dataRecords : undefined,
+    templates: templates.length ? templates : undefined,
+    templateInstances: templateInstances.length ? templateInstances : undefined,
   };
 }
 
@@ -193,6 +378,17 @@ export function saveEditorState(
         idx,
       );
     });
+
+    // ── 模板域持久化 ──
+    if (state.dataRecords) {
+      saveDataRecords(db, state.dataRecords);
+    }
+    if (state.templates) {
+      saveTemplateDefinitions(db, state.templates);
+    }
+    if (state.templateInstances) {
+      saveTemplateInstances(db, state.templateInstances);
+    }
   });
 
   tx();

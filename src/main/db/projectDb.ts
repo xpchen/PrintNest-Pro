@@ -65,8 +65,8 @@ function migrate(db: Database.Database): void {
   `);
   const row = db.prepare('SELECT MAX(version) AS v FROM schema_migrations').get() as { v: number | null } | undefined;
   const v = row?.v ?? 0;
-  if (v < 4) {
-    log.db.info('migrating schema', { from: v, to: 4 });
+  if (v < 5) {
+    log.db.info('migrating schema', { from: v, to: 5 });
   }
   if (v < 1) {
     db.exec(LAYOUT_RUNS_V1);
@@ -109,6 +109,62 @@ CREATE INDEX IF NOT EXISTS idx_run_placements_run_id ON run_placements(run_id);
       db.exec(`ALTER TABLE projects ADD COLUMN manual_edits_json TEXT`);
     }
     db.prepare('INSERT INTO schema_migrations (version) VALUES (4)').run();
+  }
+  if (v < 5) {
+    db.exec(`
+CREATE TABLE IF NOT EXISTS data_records (
+  id TEXT PRIMARY KEY NOT NULL,
+  source_session_id TEXT,
+  source_row_index INTEGER NOT NULL,
+  fields_json TEXT NOT NULL,
+  qty INTEGER NOT NULL DEFAULT 1,
+  source_name TEXT,
+  source_sheet TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS template_definitions (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'draft',
+  canvas_mode TEXT NOT NULL DEFAULT 'single_piece',
+  width_mm REAL NOT NULL,
+  height_mm REAL NOT NULL,
+  elements_json TEXT NOT NULL,
+  validation_rules_json TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS template_instances (
+  id TEXT PRIMARY KEY NOT NULL,
+  template_id TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  resolved_width_mm REAL NOT NULL,
+  resolved_height_mm REAL NOT NULL,
+  render_payload_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'valid',
+  validation_errors_json TEXT,
+  resolved_elements_json TEXT,
+  snapshot_hash TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS import_templates (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  column_mapping_json TEXT NOT NULL,
+  unit_default TEXT NOT NULL DEFAULT 'cm',
+  header_row_index INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (5)').run();
   }
 }
 

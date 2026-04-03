@@ -99,6 +99,14 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       layoutSourceSignature: payload.layoutSourceSignature,
       manualEdits: edits,
       manualEditNextRevision: nextManualEditRev(edits),
+      // 模板域恢复
+      dataRecords: payload.dataRecords ?? [],
+      templates: payload.templates ?? [],
+      templateInstances: payload.templateInstances ?? [],
+      currentTemplateId: payload.activeTemplateId ?? null,
+      selectedElementIds: [],
+      previewRecordId: null,
+      // UI 重置
       selectedIds: [],
       activeCanvasIndex: 0,
       uiPhase: 'editor',

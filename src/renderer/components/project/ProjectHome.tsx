@@ -4,6 +4,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { SerializedEditorState } from '../../../shared/persistence/editorState';
+import type { ProjectInitPayload } from '../../../shared/types/projectInit';
+import { NewProjectWizard } from './NewProjectWizard';
 import { showToast } from '../../utils/toast';
 import { formatPairMm } from '../../utils/lengthDisplay';
 
@@ -32,8 +34,10 @@ function randomProjectId(): string {
 export const ProjectHome: React.FC<ProjectHomeProps> = ({ onEnteredEditor }) => {
   const [summaries, setSummaries] = useState<ProjectSummary[]>([]);
   const [idFallback, setIdFallback] = useState<string[]>([]);
+  const [showWizard, setShowWizard] = useState(false);
   const hydrateFromEditorState = useAppStore((s) => s.hydrateFromEditorState);
   const setCurrentProjectId = useAppStore((s) => s.setCurrentProjectId);
+  const requestImportExcel = useAppStore((s) => s.requestImportExcel);
   const displayUnit = useAppStore((s) => s.displayUnit);
 
   const refreshList = useCallback(async () => {
@@ -85,14 +89,26 @@ export const ProjectHome: React.FC<ProjectHomeProps> = ({ onEnteredEditor }) => 
     if (!ok) showToast('打开文件夹失败');
   }, []);
 
-  const handleNew = useCallback(async () => {
-    const api = window.electronAPI;
-    if (!api?.createProject) return;
-    const id = randomProjectId();
-    await api.createProject(id);
-    await openProject(id);
-    void refreshList();
-  }, [openProject, refreshList]);
+  const handleNew = useCallback(() => {
+    setShowWizard(true);
+  }, []);
+
+  const handleWizardComplete = useCallback(
+    async (payload: ProjectInitPayload) => {
+      setShowWizard(false);
+      const api = window.electronAPI;
+      if (!api?.createProject) return;
+      const id = randomProjectId();
+      await api.createProject(id, payload);
+      await openProject(id);
+      void refreshList();
+      // 如果选了"从 Excel 开始"，自动触发导入
+      if (payload.startMode === 'fromExcel') {
+        requestImportExcel();
+      }
+    },
+    [openProject, refreshList, requestImportExcel],
+  );
 
   const allIds = summaries.length > 0 ? summaries.map((s) => s.id) : idFallback;
 
@@ -130,6 +146,12 @@ export const ProjectHome: React.FC<ProjectHomeProps> = ({ onEnteredEditor }) => 
 
   return (
     <div className="project-home">
+      {showWizard && (
+        <NewProjectWizard
+          onComplete={(p) => void handleWizardComplete(p)}
+          onCancel={() => setShowWizard(false)}
+        />
+      )}
       <div className="project-home-card">
         <h1 className="project-home-title">PrintNest Pro</h1>
         <p className="project-home-sub">选择或新建项目以开始排版</p>

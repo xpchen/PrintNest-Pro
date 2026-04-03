@@ -80,6 +80,10 @@ export const App: React.FC = () => {
           result: s.result,
           layoutSourceSignature: s.layoutSourceSignature,
           manualEdits: s.manualEdits,
+          dataRecords: s.dataRecords.length ? s.dataRecords : undefined,
+          templates: s.templates.length ? s.templates : undefined,
+          templateInstances: s.templateInstances.length ? s.templateInstances : undefined,
+          activeTemplateId: s.currentTemplateId,
         });
         useAppStore.getState().setSaveStatus('saved');
       } catch (err) {
@@ -105,7 +109,11 @@ export const App: React.FC = () => {
         state.layoutSourceSignature !== prev.layoutSourceSignature ||
         state.projectName !== prev.projectName ||
         state.currentProjectId !== prev.currentProjectId ||
-        state.manualEdits !== prev.manualEdits
+        state.manualEdits !== prev.manualEdits ||
+        state.dataRecords !== prev.dataRecords ||
+        state.templates !== prev.templates ||
+        state.templateInstances !== prev.templateInstances ||
+        state.currentTemplateId !== prev.currentTemplateId
       ) {
         schedule();
       }

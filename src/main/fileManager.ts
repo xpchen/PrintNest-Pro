@@ -21,7 +21,8 @@ import {
   mergeImageSrcFromLegacyJson,
 } from './db/repositories/editorStateRepository';
 import type { SerializedEditorState } from '../shared/persistence/editorState';
-import { emptyEditorState } from '../shared/persistence/editorState';
+import { emptyEditorState, createInitialEditorState } from '../shared/persistence/editorState';
+import type { ProjectInitPayload } from '../shared/types/projectInit';
 import type { ImportAssetResult } from '../shared/persistence/importAssetResult';
 import { getOrOpenProjectDb, closeProjectDb } from './db/projectDb';
 import { listRecentLayoutRuns } from './db/repositories/layoutRunRepository';
@@ -78,6 +79,10 @@ function payloadToEditorState(projectId: string, data: object): SerializedEditor
     result: (d.result as SerializedEditorState['result']) ?? null,
     layoutSourceSignature: (d.layoutSourceSignature as string) ?? null,
     manualEdits: (d.manualEdits as SerializedEditorState['manualEdits']) ?? undefined,
+    dataRecords: (d.dataRecords as SerializedEditorState['dataRecords']) ?? undefined,
+    templates: (d.templates as SerializedEditorState['templates']) ?? undefined,
+    templateInstances: (d.templateInstances as SerializedEditorState['templateInstances']) ?? undefined,
+    activeTemplateId: (d.activeTemplateId as string) ?? undefined,
   };
 }
 
@@ -182,10 +187,13 @@ function deleteProject(projectId: string): void {
   }
 }
 
-/** 新建空项目（DB + 可选 JSON 快照） */
-function createProject(projectId: string): void {
+/** 新建项目（DB + 可选 JSON 快照）；有 payload 时从向导参数初始化，否则空项目 */
+function createProject(projectId: string, initPayload?: ProjectInitPayload): void {
   ensureProjectLayout(projectId);
-  saveEditorState(projectId, emptyEditorState(projectId), { jsonSnapshot: true });
+  const state = initPayload
+    ? createInitialEditorState(projectId, initPayload)
+    : emptyEditorState(projectId);
+  saveEditorState(projectId, state, { jsonSnapshot: true });
 }
 
 /** 另存为：复制整个项目目录（不预先创建空目标目录，避免污染 cp） */
@@ -244,8 +252,8 @@ export function registerFileManagerIPC(): void {
     return true;
   });
 
-  ipcMain.handle('file:createProject', async (_event, projectId: string) => {
-    createProject(projectId);
+  ipcMain.handle('file:createProject', async (_event, projectId: string, initPayload?: ProjectInitPayload) => {
+    createProject(projectId, initPayload);
     return true;
   });
 

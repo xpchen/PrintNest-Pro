@@ -23,6 +23,10 @@ export interface ProjectSlice {
     result: LayoutResult | null;
     layoutSourceSignature: string | null;
     manualEdits?: ManualEditPatch[];
+    dataRecords?: DataRecord[];
+    templates?: TemplateDefinition[];
+    templateInstances?: TemplateInstance[];
+    activeTemplateId?: string | null;
   }) => void;
   appendManualEdit: (patch: Omit<ManualEditPatch, 'revision' | 'updatedAt'>) => void;
   clearManualEdits: () => void;
@@ -173,9 +177,21 @@ export interface TemplateSlice {
   dataRecords: DataRecord[];
   templates: TemplateDefinition[];
   templateInstances: TemplateInstance[];
+  /** 当前编辑的模板 id */
+  currentTemplateId: string | null;
+  /** 当前选中的元素 id 列表 */
+  selectedElementIds: string[];
+  /** 当前预览用的 DataRecord id */
+  previewRecordId: string | null;
+
   setDataRecords: (records: DataRecord[]) => void;
+  clearDataRecords: () => void;
   addTemplate: (t: TemplateDefinition) => void;
+  updateTemplate: (id: string, patch: Partial<TemplateDefinition>) => void;
   removeTemplate: (id: string) => void;
+  setCurrentTemplate: (id: string | null) => void;
+  selectElements: (ids: string[]) => void;
+  setPreviewRecordId: (id: string | null) => void;
   setTemplateInstances: (instances: TemplateInstance[]) => void;
 }
 
