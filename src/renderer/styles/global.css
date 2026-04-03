@@ -1247,6 +1247,61 @@ body {
   font-style: italic;
 }
 
+/* ════════════════════════════════════════════════════════════ */
+/*  ImportMappingModal                                          */
+/* ════════════════════════════════════════════════════════════ */
+.mapping-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mapping-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mapping-row__label {
+  min-width: 80px;
+  font-size: 12px;
+  color: var(--text-primary);
+  text-align: right;
+}
+.mapping-row__select {
+  flex: 1;
+  font-size: 12px;
+}
+.mapping-preview {
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+}
+.mapping-preview__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.mapping-preview__table th,
+.mapping-preview__table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.mapping-preview__table th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  color: var(--text-secondary);
+  position: sticky;
+  top: 0;
+}
+.mapping-preview__table td {
+  color: var(--text-primary);
+}
+
 .validation-issue-list {
   list-style: none;
   padding: var(--space-8);

@@ -39,6 +39,8 @@ declare global {
     deleteProject: (projectId: string) => Promise<boolean>;
     readAsBase64: (filePath: string) => Promise<string | null>;
     parseExcelImport: (filePath: string) => Promise<ExcelImportResult>;
+    readExcelSheets?: (filePath: string) => Promise<unknown[]>;
+    mapTableToImportRows?: (table: object, config: object) => Promise<{ rows: unknown[]; warnings: string[] }>;
     exportPdf: (options: object) => Promise<{ success: boolean; error?: string; path?: string }>;
     exportPdfHistoricalRun?: (options: {
       projectId: string;

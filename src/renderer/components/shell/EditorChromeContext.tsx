@@ -13,6 +13,8 @@ import React, {
 import { useAppStore } from '../../store/useAppStore';
 import { PackingStrategy } from '../../../shared/types';
 import type { ImportAssetResult } from '../../../shared/persistence/importAssetResult';
+import type { ParsedTable } from '../../../shared/importMapping';
+import { ImportMappingModal } from '../import/ImportMappingModal';
 import { showToast } from '../../utils/toast';
 import { DEFAULT_IMPORT_DPI, pxToMm } from '../../utils/imageMm';
 
@@ -57,6 +59,7 @@ export const EditorChromeProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [modalDpi, setModalDpi] = useState(DEFAULT_IMPORT_DPI);
   const [modalQty, setModalQty] = useState(1);
   const modalFileRef = useRef<HTMLInputElement>(null);
+  const [mappingTables, setMappingTables] = useState<ParsedTable[] | null>(null);
 
   const openModal = useCallback(() => {
     setShowModal(true);
@@ -180,7 +183,8 @@ export const EditorChromeProvider: React.FC<{ children: React.ReactNode }> = ({ 
     modalFileRef.current?.click();
   }, [modalDpi]);
 
-  const handleImportExcel = useCallback(async () => {
+  /** 旧路径：直接解析导入（Shift+导入 或 readExcelSheets 不可用时） */
+  const handleImportExcelLegacy = useCallback(async () => {
     const api = window.electronAPI;
     if (!api?.openExcelFile || !api?.parseExcelImport) {
       showToast('Excel 导入不可用（非 Electron 环境）');
@@ -222,6 +226,35 @@ export const EditorChromeProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.warn('[Excel 导入]', res.warnings);
     }
   }, [addItem, setConfig]);
+
+  /** 新路径：readExcelSheets → 打开映射 Modal */
+  const handleImportExcel = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!api?.openExcelFile) {
+      showToast('Excel 导入不可用');
+      return;
+    }
+
+    // 如果 readExcelSheets 不可用，走旧路径
+    if (!api.readExcelSheets) {
+      return handleImportExcelLegacy();
+    }
+
+    const paths = await api.openExcelFile();
+    if (!paths || paths.length === 0) return;
+
+    try {
+      const tables = (await api.readExcelSheets(paths[0])) as ParsedTable[];
+      if (!tables || tables.length === 0) {
+        showToast('未找到有效工作表');
+        return;
+      }
+      setMappingTables(tables);
+    } catch (err) {
+      showToast('读取 Excel 失败');
+      console.error('[readExcelSheets]', err);
+    }
+  }, [handleImportExcelLegacy]);
 
   const handleLayout = useCallback(async () => {
     if (items.length === 0) {
@@ -498,6 +531,12 @@ export const EditorChromeProvider: React.FC<{ children: React.ReactNode }> = ({ 
             </div>
           </div>
         </div>
+      )}
+      {mappingTables && (
+        <ImportMappingModal
+          tables={mappingTables}
+          onClose={() => setMappingTables(null)}
+        />
       )}
     </EditorChromeContext.Provider>
   );

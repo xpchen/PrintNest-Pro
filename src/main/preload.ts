@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('file:readAsBase64', filePath),
   parseExcelImport: (filePath: string) =>
     ipcRenderer.invoke('file:parseExcelImport', filePath),
+  readExcelSheets: (filePath: string) =>
+    ipcRenderer.invoke('file:readExcelSheets', filePath),
+  mapTableToImportRows: (table: object, config: object) =>
+    ipcRenderer.invoke('file:mapTableToImportRows', table, config),
 
   // PDF 导出
   exportPdf: (options: object) =>

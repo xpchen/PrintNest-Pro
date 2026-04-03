@@ -323,4 +323,15 @@ export function registerExcelImportIPC(): void {
   ipcMain.handle('file:parseExcelImport', async (_event, filePath: string) => {
     return parseExcelImportFile(filePath);
   });
+
+  ipcMain.handle('file:readExcelSheets', async (_event, filePath: string) => {
+    return readExcelSheets(filePath);
+  });
+
+  ipcMain.handle(
+    'file:mapTableToImportRows',
+    async (_event, table: ParsedTable, config: ImportMappingConfig) => {
+      return mapTableToImportRows(table, config);
+    },
+  );
 }
