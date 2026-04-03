@@ -22,8 +22,6 @@ export const createCanvasViewSlice: StateCreator<AppState, [], [], CanvasViewSli
   activeSegmentIndex: 0,
   viewportContainerPx: { width: 0, height: 0 },
 
-  leftPanelVisible: true,
-  rightPanelVisible: true,
   statusBarVisible: true,
 
   importModalNonce: 0,
@@ -54,8 +52,6 @@ export const createCanvasViewSlice: StateCreator<AppState, [], [], CanvasViewSli
   applyViewFitWidth: () => applyFitWidth(get, set),
   applyViewActual100: () => applyActual100(set),
 
-  toggleLeftPanel: () => set((s) => ({ leftPanelVisible: !s.leftPanelVisible })),
-  toggleRightPanel: () => set((s) => ({ rightPanelVisible: !s.rightPanelVisible })),
   toggleStatusBar: () => set((s) => ({ statusBarVisible: !s.statusBarVisible })),
   toggleRunPanel: () => set((s) => ({ runPanelVisible: !s.runPanelVisible })),
   setRunPanelVisible: (v) => set({ runPanelVisible: v }),

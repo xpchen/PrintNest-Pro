@@ -84,10 +84,10 @@ export function dispatchAppCommand(id: string, _payload?: unknown): void {
       get().setOverviewVisible(!get().overviewVisible);
       break;
     case AppCommand.VIEW_TOGGLE_LEFT_PANEL:
-      get().toggleLeftPanel();
+      get().toggleLeftDock();
       break;
     case AppCommand.VIEW_TOGGLE_RIGHT_PANEL:
-      get().toggleRightPanel();
+      get().toggleRightDock();
       break;
     case AppCommand.VIEW_TOGGLE_STATUS:
       get().toggleStatusBar();
@@ -104,6 +104,7 @@ export function dispatchAppCommand(id: string, _payload?: unknown): void {
     case AppCommand.VIEW_OPEN_RUN_PANEL:
       get().setRunPanelVisible(true);
       get().setSidebarTab('run');
+      get().expandLeftDock();
       showToast('已切换到左侧「Run」');
       break;
 

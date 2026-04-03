@@ -1,0 +1,50 @@
+/* 画布舞台与鹰眼 */
+.canvas-viewport--stage {
+  background: var(--surface-canvas);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.overview-card {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 216px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(24, 26, 36, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(8px);
+}
+
+.overview-card__canvas-wrap {
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.overview-card__seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.overview-card__seg-meta {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.overview-card__seg-input {
+  width: 56px;
+  height: 24px;
+  font-size: 10px;
+  padding: 2px 4px;
+}
+
+.overview-card__hint {
+  margin-top: 6px;
+  font-size: 9px;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}

@@ -1,0 +1,34 @@
+/* PrintNest v1.1 — 设计令牌（语义色与壳层尺寸） */
+:root {
+  --shell-topbar-h: 48px;
+  --shell-contextbar-h: 44px;
+  --shell-statusbar-h: 28px;
+  --dock-rail-w: 52px;
+  --dock-left-expanded-w: 320px;
+  --dock-right-expanded-w: 340px;
+
+  --surface-base: #181a24;
+  --surface-panel: #222536;
+  --surface-elevated: #2a2f44;
+  --surface-canvas: #31354a;
+
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.62);
+  --border-default: rgba(255, 255, 255, 0.1);
+
+  --accent-primary: #6f6dff;
+  --accent-soft: rgba(111, 109, 255, 0.18);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.45);
+
+  --z-dock-panel: 10;
+  --z-dock-peek: 40;
+  --z-overview: 50;
+  --z-dropdown: 100;
+  --z-modal: 200;
+}

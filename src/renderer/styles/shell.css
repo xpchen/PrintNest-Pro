@@ -1,0 +1,265 @@
+/* 顶栏、上下文栏 */
+.shell-topbar {
+  height: var(--shell-topbar-h);
+  min-height: var(--shell-topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-16, 16px);
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+.shell-topbar__left,
+.shell-topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.shell-topbar__center {
+  flex: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.shell-topbar__brand {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.shell-topbar__sep {
+  opacity: 0.4;
+}
+
+.shell-topbar__project {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+  color: var(--accent-primary);
+}
+
+.btn-shell {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.btn-shell--cta {
+  min-width: 96px;
+  font-weight: 600;
+}
+
+.shell-contextbar {
+  height: var(--shell-contextbar-h);
+  min-height: var(--shell-contextbar-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 var(--space-16, 16px);
+  background: var(--surface-base);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.shell-contextbar__group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.shell-contextbar__label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.shell-contextbar__muted {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.shell-contextbar__divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border-default);
+  flex-shrink: 0;
+}
+
+.shell-contextbar__check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.select-shell,
+.input-shell {
+  height: 28px;
+  font-size: 12px;
+}
+
+.shell-project-menu {
+  position: relative;
+}
+
+.shell-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 160px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: 4px 0;
+  z-index: var(--z-dropdown);
+}
+
+.shell-dropdown--align-right {
+  left: auto;
+  right: 0;
+}
+
+.shell-dropdown__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 13px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.shell-dropdown__item:hover {
+  background: var(--accent-soft);
+}
+
+.pn-z-dropdown {
+  z-index: var(--z-dropdown);
+}
+
+.pn-z-modal {
+  z-index: var(--z-modal);
+}
+
+.pn-z-dock-panel {
+  z-index: var(--z-dock-panel);
+}
+
+.pn-z-overview {
+  z-index: var(--z-overview);
+}
+
+.pn-z-canvas-header {
+  z-index: 5;
+}
+
+.app-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  background: var(--surface-base);
+}
+
+.center-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.center-stage__canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas-header {
+  flex-shrink: 0;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.canvas-header__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.canvas-header__stale {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: none;
+  background: rgba(245, 185, 66, 0.15);
+  color: var(--warning);
+  cursor: pointer;
+  border-bottom: 1px solid rgba(245, 185, 66, 0.25);
+}
+
+.canvas-header__stale:hover {
+  background: rgba(245, 185, 66, 0.22);
+}
+
+.canvas-header__tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.canvas-header__util {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.canvas-header__views,
+.canvas-header__zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.canvas-header__zoom-label {
+  font-size: 12px;
+  min-width: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.btn-tiny {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.btn-tiny.is-off {
+  opacity: 0.45;
+}
+
+.canvas-tab {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}

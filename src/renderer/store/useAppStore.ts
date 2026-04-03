@@ -7,12 +7,14 @@ import { createProjectSlice } from './slices/projectSlice';
 import { createSelectionSlice } from './slices/selectionSlice';
 import { createCanvasViewSlice } from './slices/canvasViewSlice';
 import { createLayoutJobSlice } from './slices/layoutJobSlice';
+import { createUiShellSlice } from './slices/uiShellSlice';
 
 export const useAppStore = create<AppState>()((...args) => ({
   ...createProjectSlice(...args),
   ...createSelectionSlice(...args),
   ...createCanvasViewSlice(...args),
   ...createLayoutJobSlice(...args),
+  ...createUiShellSlice(...args),
 }));
 
 export type { AppState, AlignMode } from './types';

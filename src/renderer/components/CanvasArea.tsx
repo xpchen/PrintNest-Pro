@@ -6,10 +6,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Placement } from '../../shared/types';
-import { buildLayoutSignature } from '../../shared/layoutSignature';
-import { CanvasViewControls } from './canvas/CanvasViewControls';
-import { CanvasMiniMap } from './canvas/CanvasMiniMap';
-import { SegmentNavigator } from './canvas/SegmentNavigator';
 
 // ==================== Image Cache ====================
 const imageCache = new Map<string, HTMLImageElement>();
@@ -77,19 +73,14 @@ export const CanvasArea: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const {
-    result, config, items, activeCanvasIndex, selectedIds, zoom, layoutSourceSignature,
+    result, config, items, activeCanvasIndex, selectedIds, zoom,
     showGrid, showRuler, showSafeMargin,
-    setActiveCanvas, setSelectedIds, toggleLock, updatePlacement, deleteSelected,
+    setSelectedIds, toggleLock, updatePlacement, deleteSelected,
     panOffset, setPanOffset,
   } = useAppStore();
 
   const [invalidDragTick, setInvalidDragTick] = useState(0);
   const dragInvalidRef = useRef<Set<string>>(new Set());
-
-  const layoutStale =
-    !!result &&
-    layoutSourceSignature !== null &&
-    buildLayoutSignature(items, config) !== layoutSourceSignature;
 
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -715,29 +706,7 @@ export const CanvasArea: React.FC = () => {
     >
       {showDrop && <div className="drop-overlay">松开鼠标导入图片</div>}
 
-      {layoutStale && (
-        <div className="layout-stale-banner">
-          素材列表或画布设置已变更，与当前画布不一致。请重新点击「自动排版」后再查看尺寸。
-        </div>
-      )}
-
-      {/* Canvas Tabs */}
-      {result && result.canvases.length > 0 && (
-        <div className="canvas-tabs">
-          {result.canvases.map((c, idx) => (
-            <div
-              key={idx}
-              className={`canvas-tab ${idx === activeCanvasIndex ? 'active' : ''}`}
-              onClick={() => { setActiveCanvas(idx); setSelectedIds([]); }}
-            >
-              画布 {idx + 1} ({(c.utilization * 100).toFixed(1)}%)
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Canvas Viewport */}
-      <div className="canvas-viewport" ref={containerRef}>
+      <div className="canvas-viewport canvas-viewport--stage" ref={containerRef}>
         <canvas
           ref={canvasRef}
           className="layout-canvas"
@@ -748,9 +717,6 @@ export const CanvasArea: React.FC = () => {
           onMouseLeave={handleMouseUp}
           onContextMenu={handleContextMenu}
         />
-        <CanvasViewControls />
-        <SegmentNavigator />
-        <CanvasMiniMap />
       </div>
     </div>
   );

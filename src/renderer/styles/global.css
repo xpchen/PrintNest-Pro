@@ -1,4 +1,11 @@
 /* PrintNest Pro - Global Styles */
+@import './tokens.css';
+@import './shell.css';
+@import './dock.css';
+@import './panel.css';
+@import './canvas-v11.css';
+@import './status-v11.css';
+
 :root {
   /* 设计令牌（spacing / radius / text / semantic） */
   --space-4: 4px;
@@ -695,20 +702,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(165deg, var(--bg-primary) 0%, #252538 100%);
+  background: linear-gradient(165deg, var(--surface-base, var(--bg-primary)) 0%, var(--surface-panel, #252538) 100%);
 }
 .project-home-card {
   width: min(560px, 94vw);
   padding: 32px 36px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--surface-panel, var(--bg-secondary));
+  border: 1px solid var(--border-default, var(--border));
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-panel, none);
 }
 .project-home-title {
   font-size: 26px;
   font-weight: 700;
   margin-bottom: 8px;
   letter-spacing: -0.02em;
+  color: var(--text-primary);
 }
 .project-home-sub {
   font-size: 14px;

@@ -54,6 +54,19 @@ export type AlignMode = 'left' | 'right' | 'top' | 'bottom' | 'hcenter' | 'vcent
 
 export type CanvasViewMode = 'fitAll' | 'fitWidth' | 'actual' | 'custom';
 
+export type RightDockTab = 'properties' | 'project' | 'canvas';
+
+export interface UiShellSlice {
+  leftDockCollapsed: boolean;
+  rightDockCollapsed: boolean;
+  rightTab: RightDockTab;
+  toggleLeftDock: () => void;
+  toggleRightDock: () => void;
+  setRightTab: (tab: RightDockTab) => void;
+  expandLeftDock: () => void;
+  expandRightDock: () => void;
+}
+
 export interface CanvasViewSlice {
   activeCanvasIndex: number;
   zoom: number;
@@ -69,8 +82,6 @@ export interface CanvasViewSlice {
   activeSegmentIndex: number;
   viewportContainerPx: { width: number; height: number };
 
-  leftPanelVisible: boolean;
-  rightPanelVisible: boolean;
   statusBarVisible: boolean;
 
   importModalNonce: number;
@@ -96,8 +107,6 @@ export interface CanvasViewSlice {
   applyViewFitWidth: () => void;
   applyViewActual100: () => void;
 
-  toggleLeftPanel: () => void;
-  toggleRightPanel: () => void;
   toggleStatusBar: () => void;
   toggleRunPanel: () => void;
   setRunPanelVisible: (v: boolean) => void;
@@ -139,7 +148,7 @@ export interface LayoutJobSlice {
   alignSelected: (mode: AlignMode) => void;
 }
 
-export type AppState = ProjectSlice & SelectionSlice & CanvasViewSlice & LayoutJobSlice;
+export type AppState = ProjectSlice & SelectionSlice & CanvasViewSlice & LayoutJobSlice & UiShellSlice;
 
 export const defaultConfig = (): LayoutConfig => ({
   canvas: { width: 1000, height: 1500 },

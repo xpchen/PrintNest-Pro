@@ -1,0 +1,10 @@
+/* 底栏轻量 */
+.statusbar--v11 {
+  height: var(--shell-statusbar-h);
+  min-height: var(--shell-statusbar-h);
+  font-size: 11px;
+}
+
+.statusbar--v11 .statusbar-item {
+  padding: 0 10px;
+}

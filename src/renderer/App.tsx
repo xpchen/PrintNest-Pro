@@ -1,24 +1,26 @@
 /**
- * PrintNest Pro - 主应用组件
- * 五区布局：Toolbar | Sidebar | CanvasArea | Inspector | StatusBar
- * Electron：首启尝试恢复上次项目，否则进入轻首页；自动保存为防抖 + DB 权威。
+ * PrintNest Pro — AppFrame：AppTopBar + ContextBar + Workspace(Docks + CenterStage) + StatusBar
  */
 import React, { useEffect, useRef } from 'react';
-import { Toolbar } from './components/Toolbar';
-import { Sidebar } from './components/Sidebar';
 import { CanvasArea } from './components/CanvasArea';
-import { Inspector } from './components/Inspector';
+import { CanvasHeader } from './components/canvas/CanvasHeader';
+import { OverviewCard } from './components/canvas/OverviewCard';
 import { StatusBar } from './components/StatusBar';
 import { ProjectHome, readLastProjectId } from './components/project/ProjectHome';
+import { EditorChromeProvider } from './components/shell/EditorChromeContext';
+import { AppTopBar } from './components/shell/AppTopBar';
+import { ContextBar } from './components/shell/ContextBar';
+import { LeftDock } from './components/shell/LeftDock';
+import { RightDock } from './components/shell/RightDock';
 import { useAppStore } from './store/useAppStore';
 import type { SerializedEditorState } from '../shared/persistence/editorState';
 import { dispatchAppCommand } from './commands/commandRegistry';
+import { loadUiShellFromStorage, persistUiShellToStorage } from './store/slices/uiShellSlice';
 
 export const App: React.FC = () => {
   const uiPhase = useAppStore((s) => s.uiPhase);
-  const leftPanelVisible = useAppStore((s) => s.leftPanelVisible);
-  const rightPanelVisible = useAppStore((s) => s.rightPanelVisible);
   const statusBarVisible = useAppStore((s) => s.statusBarVisible);
+  const currentProjectId = useAppStore((s) => s.currentProjectId);
   const saveTimerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -104,19 +106,48 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (uiPhase !== 'editor') return;
+    const patch = loadUiShellFromStorage(currentProjectId);
+    if (Object.keys(patch).length > 0) {
+      useAppStore.setState(patch);
+    }
+  }, [currentProjectId, uiPhase]);
+
+  useEffect(() => {
+    let t: number | undefined;
+    return useAppStore.subscribe((state) => {
+      if (state.uiPhase !== 'editor') return;
+      if (t !== undefined) window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        t = undefined;
+        persistUiShellToStorage(state);
+      }, 400);
+    });
+  }, []);
+
   if (uiPhase === 'home') {
     return <ProjectHome onEnteredEditor={() => undefined} />;
   }
 
   return (
-    <div className="app-layout">
-      <Toolbar />
-      <div className="app-body">
-        {leftPanelVisible && <Sidebar />}
-        <CanvasArea />
-        {rightPanelVisible && <Inspector />}
+    <EditorChromeProvider>
+      <div className="app-layout app-layout--v11">
+        <AppTopBar />
+        <ContextBar />
+        <div className="app-workspace">
+          <LeftDock />
+          <main className="center-stage">
+            <CanvasHeader />
+            <div className="center-stage__canvas-wrap">
+              <CanvasArea />
+              <OverviewCard />
+            </div>
+          </main>
+          <RightDock />
+        </div>
+        {statusBarVisible && <StatusBar />}
       </div>
-      {statusBarVisible && <StatusBar />}
-    </div>
+    </EditorChromeProvider>
   );
 };

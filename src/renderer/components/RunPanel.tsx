@@ -48,6 +48,30 @@ export const RunPanel: React.FC = () => {
     void refresh();
   }, [refresh]);
 
+  const exportRunPdf = useCallback(
+    async (runId: string) => {
+      const api = window.electronAPI;
+      if (!api?.exportPdfHistoricalRun || !api?.saveFile) {
+        showToast('导出不可用');
+        return;
+      }
+      const isPdfOk = await api.isPdfAvailable?.();
+      if (!isPdfOk) {
+        showToast('PDFKit 未安装');
+        return;
+      }
+      const outputPath = await api.saveFile(`PrintNest_run_${runId.slice(0, 8)}.pdf`, 'PDF', ['pdf']);
+      if (!outputPath) return;
+      const res = await api.exportPdfHistoricalRun({
+        projectId: currentProjectId,
+        layoutRunId: runId,
+        outputPath,
+      });
+      showToast(res.success ? 'PDF 已导出' : `导出失败: ${res.error ?? ''}`);
+    },
+    [currentProjectId],
+  );
+
   const restore = useCallback(
     async (runId: string) => {
       if (
@@ -92,6 +116,14 @@ export const RunPanel: React.FC = () => {
         <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => void refresh()}>
           刷新
         </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ fontSize: 12 }}
+          onClick={() => useAppStore.getState().requestExportCurrentPdf()}
+        >
+          导出当前排版 PDF
+        </button>
       </div>
       {runs.length === 0 ? (
         <p className="run-panel__hint">暂无排版记录，请先执行自动排版。</p>
@@ -111,9 +143,14 @@ export const RunPanel: React.FC = () => {
                 {fingerprintFromSnapshot(r.config_snapshot_json)}
               </div>
               <div className="run-panel__time">{r.created_at.replace('T', ' ').slice(0, 19)}</div>
-              <button type="button" className="btn btn-primary run-panel__restore" onClick={() => void restore(r.id)}>
-                恢复为新草稿
-              </button>
+              <div className="run-panel__actions">
+                <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => void exportRunPdf(r.id)}>
+                  导出此 Run PDF
+                </button>
+                <button type="button" className="btn btn-primary run-panel__restore" onClick={() => void restore(r.id)}>
+                  恢复为新草稿
+                </button>
+              </div>
             </li>
           ))}
         </ul>

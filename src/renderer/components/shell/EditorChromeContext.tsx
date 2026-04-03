@@ -1,54 +1,63 @@
 /**
- * 顶部工具栏
- * 导入图片（弹窗模式）| 自动排版 | 策略选择 | 画布设置 | 缩放 | 导出
+ * 编辑器顶栏所需：导入弹窗、Excel、导出 PDF、自动排版等（原 Toolbar 内逻辑）
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useAppStore } from '../store/useAppStore';
-import { PackingStrategy } from '../../shared/types';
-import type { ImportAssetResult } from '../../shared/persistence/importAssetResult';
-import { showToast } from '../utils/toast';
-import { useToolbarProjectMenu } from '../hooks/useToolbarProjectMenu';
-import { DEFAULT_IMPORT_DPI, pxToMm } from '../utils/imageMm';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { useAppStore } from '../../store/useAppStore';
+import { PackingStrategy } from '../../../shared/types';
+import type { ImportAssetResult } from '../../../shared/persistence/importAssetResult';
+import { showToast } from '../../utils/toast';
+import { DEFAULT_IMPORT_DPI, pxToMm } from '../../utils/imageMm';
 
-interface ModalPreview {
+export interface ModalPreview {
   name: string;
   src: string;
   pw: number;
   ph: number;
   mmW: number;
   mmH: number;
-  /** Electron：磁盘路径，确认导入时走 importAssets */
   localPath?: string;
 }
 
-export const Toolbar: React.FC = () => {
+export interface EditorChromeContextValue {
+  openImportModal: () => void;
+  handleImportExcel: () => Promise<void>;
+  handleExportPng: () => void;
+  handleExportPdf: () => Promise<void>;
+  requestExportHistoricalPdf: () => void;
+  handleLayout: () => Promise<void>;
+  itemsLength: number;
+  isComputing: boolean;
+}
+
+const EditorChromeContext = createContext<EditorChromeContextValue | null>(null);
+
+export function useEditorChrome(): EditorChromeContextValue {
+  const v = useContext(EditorChromeContext);
+  if (!v) throw new Error('useEditorChrome must be used within EditorChromeProvider');
+  return v;
+}
+
+export const EditorChromeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const {
-    config, isComputing, zoom, result, activeCanvasIndex, items,
-    addItem, setConfig, setCanvasSize, runAutoLayout, setZoom,
-    showGrid, showRuler, showSafeMargin, snapMm,
-    setShowGrid, setShowRuler, setShowSafeMargin, setSnapMm,
+    config, isComputing, result, activeCanvasIndex, items,
+    addItem, setConfig, runAutoLayout,
     currentProjectId,
   } = useAppStore();
 
-  const {
-    projectMenuOpen,
-    setProjectMenuOpen,
-    projectMenuRef,
-    handleProjectNew,
-    handleProjectOpenRecent,
-    handleProjectSaveAs,
-    handleProjectClose,
-  } = useToolbarProjectMenu();
-
-  // Modal state
   const [showModal, setShowModal] = useState(false);
   const [modalPreviews, setModalPreviews] = useState<ModalPreview[]>([]);
   const [modalDpi, setModalDpi] = useState(DEFAULT_IMPORT_DPI);
   const [modalQty, setModalQty] = useState(5);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const modalFileRef = useRef<HTMLInputElement>(null);
 
-  /** Open import modal */
   const openModal = useCallback(() => {
     setShowModal(true);
     setModalPreviews([]);
@@ -56,37 +65,38 @@ export const Toolbar: React.FC = () => {
     setModalQty(5);
   }, []);
 
-  /** Process files selected in modal */
-  const processModalFiles = useCallback((files: FileList | File[]) => {
-    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
-    if (imageFiles.length === 0) return;
-    const previews: ModalPreview[] = [];
-    let loaded = 0;
-    for (const file of imageFiles) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const src = e.target?.result as string;
-        const img = new Image();
-        img.onload = () => {
-          previews.push({
-            name: file.name,
-            src,
-            pw: img.naturalWidth,
-            ph: img.naturalHeight,
-            mmW: pxToMm(img.naturalWidth, modalDpi),
-            mmH: pxToMm(img.naturalHeight, modalDpi),
-          });
-          if (++loaded === imageFiles.length) {
-            setModalPreviews([...previews]);
-          }
+  const processModalFiles = useCallback(
+    (files: FileList | File[]) => {
+      const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+      if (imageFiles.length === 0) return;
+      const previews: ModalPreview[] = [];
+      let loaded = 0;
+      for (const file of imageFiles) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const src = e.target?.result as string;
+          const img = new Image();
+          img.onload = () => {
+            previews.push({
+              name: file.name,
+              src,
+              pw: img.naturalWidth,
+              ph: img.naturalHeight,
+              mmW: pxToMm(img.naturalWidth, modalDpi),
+              mmH: pxToMm(img.naturalHeight, modalDpi),
+            });
+            if (++loaded === imageFiles.length) {
+              setModalPreviews([...previews]);
+            }
+          };
+          img.src = src;
         };
-        img.src = src;
-      };
-      reader.readAsDataURL(file);
-    }
-  }, [modalDpi]);
+        reader.readAsDataURL(file);
+      }
+    },
+    [modalDpi],
+  );
 
-  /** Recalc previews when DPI changes */
   const handleDpiChange = useCallback((dpi: number) => {
     setModalDpi(dpi);
     setModalPreviews((prev) =>
@@ -94,11 +104,10 @@ export const Toolbar: React.FC = () => {
         ...p,
         mmW: pxToMm(p.pw, dpi),
         mmH: pxToMm(p.ph, dpi),
-      }))
+      })),
     );
   }, []);
 
-  /** Add items from modal */
   const addFromModal = useCallback(async () => {
     if (modalPreviews.length === 0) {
       showToast('请先选择图片');
@@ -171,7 +180,6 @@ export const Toolbar: React.FC = () => {
     modalFileRef.current?.click();
   }, [modalDpi]);
 
-  /** Import rows from Excel (内部单号 + 尺寸 cm) */
   const handleImportExcel = useCallback(async () => {
     const api = window.electronAPI;
     if (!api?.openExcelFile || !api?.parseExcelImport) {
@@ -215,7 +223,6 @@ export const Toolbar: React.FC = () => {
     }
   }, [addItem, setConfig]);
 
-  /** Auto layout */
   const handleLayout = useCallback(async () => {
     if (items.length === 0) {
       showToast('请先导入素材');
@@ -239,7 +246,6 @@ export const Toolbar: React.FC = () => {
     }
   }, [items, runAutoLayout]);
 
-  /** Clean PNG export (2x scale, no UI chrome) */
   const handleExportPng = useCallback(() => {
     if (!result || !result.canvases[activeCanvasIndex]) {
       showToast('请先执行排版');
@@ -259,11 +265,7 @@ export const Toolbar: React.FC = () => {
     const cur = result.canvases[activeCanvasIndex];
     for (const p of cur.placements) {
       const item = items.find((i) => i.id === p.printItemId);
-      // Try to draw image from cache
-      const imgEl = item?.imageSrc ? document.querySelector<HTMLImageElement>(`img[src="${item.imageSrc}"]`) : null;
-      // Use a simpler approach: create and draw
       if (item?.imageSrc) {
-        // Check if image is already loaded in a tmp way
         const tmpImg = new Image();
         tmpImg.src = item.imageSrc;
         if (tmpImg.complete && tmpImg.naturalWidth > 0) {
@@ -288,7 +290,6 @@ export const Toolbar: React.FC = () => {
     showToast('PNG 已导出');
   }, [result, activeCanvasIndex, config, items]);
 
-  /** PDF export via Electron IPC */
   const handleExportPdf = useCallback(async () => {
     if (!result || result.canvases.length === 0) {
       showToast('请先执行排版');
@@ -311,7 +312,11 @@ export const Toolbar: React.FC = () => {
       placements: c.placements.map((p) => {
         const item = items.find((i) => i.id === p.printItemId);
         return {
-          x: p.x, y: p.y, width: p.width, height: p.height, rotated: p.rotated,
+          x: p.x,
+          y: p.y,
+          width: p.width,
+          height: p.height,
+          rotated: p.rotated,
           imageBase64: item?.imageSrc || undefined,
           assetId: item?.assetId,
           color: item?.color || '#ccc',
@@ -336,6 +341,10 @@ export const Toolbar: React.FC = () => {
       showToast('导出失败: ' + res.error);
     }
   }, [result, items, config, currentProjectId]);
+
+  const requestExportHistoricalPdf = useCallback(() => {
+    useAppStore.getState().requestExportHistoricalRunPdf();
+  }, []);
 
   const importModalNonce = useAppStore((s) => s.importModalNonce);
   const excelImportNonce = useAppStore((s) => s.excelImportNonce);
@@ -381,188 +390,41 @@ export const Toolbar: React.FC = () => {
     })();
   }, [exportPdfHistoricalNonce]);
 
+  const value = useMemo<EditorChromeContextValue>(
+    () => ({
+      openImportModal: openModal,
+      handleImportExcel,
+      handleExportPng,
+      handleExportPdf,
+      requestExportHistoricalPdf,
+      handleLayout,
+      itemsLength: items.length,
+      isComputing,
+    }),
+    [
+      openModal,
+      handleImportExcel,
+      handleExportPng,
+      handleExportPdf,
+      requestExportHistoricalPdf,
+      handleLayout,
+      items.length,
+      isComputing,
+    ],
+  );
+
   return (
-    <>
-      <div className="toolbar">
-        <div className="toolbar-group toolbar-project-menu" ref={projectMenuRef}>
-          <button type="button" className="btn" onClick={() => setProjectMenuOpen((v) => !v)}>
-            项目 ▾
-          </button>
-          {projectMenuOpen && (
-            <div className="toolbar-dropdown">
-              <button type="button" className="toolbar-dropdown-item" onClick={() => void handleProjectNew()}>
-                新建
-              </button>
-              <button type="button" className="toolbar-dropdown-item" onClick={() => void handleProjectOpenRecent()}>
-                打开最近
-              </button>
-              <button type="button" className="toolbar-dropdown-item" onClick={() => void handleProjectSaveAs()}>
-                另存为
-              </button>
-              <button type="button" className="toolbar-dropdown-item" onClick={handleProjectClose}>
-                关闭（回首页）
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="toolbar-divider" />
-
-        {/* Import */}
-        <div className="toolbar-group">
-          <button className="btn" onClick={openModal}>&#128206; 导入图片</button>
-          <button className="btn" onClick={handleImportExcel} title="表头需含「内部单号」「尺寸」，尺寸格式 宽-高（厘米）">
-            &#128196; 导入 Excel
-          </button>
-        </div>
-
-        <div className="toolbar-divider" />
-
-        {/* Layout control */}
-        <div className="toolbar-group">
-          <button
-            className="btn btn-primary"
-            onClick={handleLayout}
-            disabled={isComputing}
-          >
-            {isComputing ? '排版中...' : '\u25B6 自动排版'}
-          </button>
-          <select
-            className="select"
-            value={config.strategy}
-            onChange={(e) => setConfig({ strategy: e.target.value as PackingStrategy })}
-          >
-            <option value={PackingStrategy.BestShortSideFit}>短边优先 (BSSF)</option>
-            <option value={PackingStrategy.BestLongSideFit}>长边优先 (BLSF)</option>
-            <option value={PackingStrategy.BestAreaFit}>面积优先 (BAF)</option>
-            <option value={PackingStrategy.BottomLeft}>左下角 (BL)</option>
-          </select>
-          <label
-            className="toolbar-check"
-            style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}
-            title="开启后只使用一张画布，放不下的件计入「未排入」"
-          >
-            <input
-              type="checkbox"
-              checked={config.singleCanvas}
-              onChange={(e) => setConfig({ singleCanvas: e.target.checked })}
-            />
-            单画布
-          </label>
-        </div>
-
-        <div className="toolbar-divider" />
-
-        {/* Canvas size */}
-        <div className="toolbar-group">
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>画布:</span>
-          <input
-            className="input"
-            type="number"
-            value={config.canvas.width}
-            onChange={(e) => setCanvasSize(Number(e.target.value), config.canvas.height)}
-            style={{ width: 55 }}
-          />
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>x</span>
-          <input
-            className="input"
-            type="number"
-            value={config.canvas.height}
-            onChange={(e) => setCanvasSize(config.canvas.width, Number(e.target.value))}
-            style={{ width: 55 }}
-          />
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>mm</span>
-        </div>
-
-        <div className="toolbar-divider" />
-
-        {/* Spacing & Bleed */}
-        <div className="toolbar-group">
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>间距:</span>
-          <input
-            className="input"
-            type="number"
-            style={{ width: 40 }}
-            value={config.globalSpacing}
-            onChange={(e) => setConfig({ globalSpacing: Number(e.target.value) })}
-          />
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>出血:</span>
-          <input
-            className="input"
-            type="number"
-            style={{ width: 40 }}
-            value={config.globalBleed}
-            onChange={(e) => setConfig({ globalBleed: Number(e.target.value) })}
-          />
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }} title="校验时要求落位与画布边至少留出此距离">
-            安全边:
-          </span>
-          <input
-            className="input"
-            type="number"
-            min={0}
-            style={{ width: 40 }}
-            value={config.edgeSafeMm ?? 0}
-            onChange={(e) => setConfig({ edgeSafeMm: Math.max(0, Number(e.target.value) || 0) })}
-          />
-        </div>
-
-        <div className="toolbar-divider" />
-
-        <div className="toolbar-group" style={{ gap: 6 }}>
-          <label className="toolbar-check" style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} />
-            网格
-          </label>
-          <label className="toolbar-check" style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={showRuler} onChange={(e) => setShowRuler(e.target.checked)} />
-            标尺
-          </label>
-          <label className="toolbar-check" style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }} title="按安全边参数显示内缩虚线">
-            <input type="checkbox" checked={showSafeMargin} onChange={(e) => setShowSafeMargin(e.target.checked)} />
-            安全边线
-          </label>
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>吸附</span>
-          <select
-            className="select"
-            style={{ minWidth: 72, padding: '4px 6px', fontSize: 12 }}
-            value={snapMm}
-            onChange={(e) => setSnapMm(Number(e.target.value))}
-          >
-            <option value={1}>1 mm</option>
-            <option value={5}>5 mm</option>
-            <option value={10}>10 mm</option>
-            <option value={25}>25 mm</option>
-          </select>
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        {/* Zoom */}
-        <div className="toolbar-group">
-          <button className="btn" onClick={() => setZoom(zoom - 0.05)}>−</button>
-          <span style={{ fontSize: 12, minWidth: 36, textAlign: 'center' }}>
-            {Math.round(zoom * 100)}%
-          </span>
-          <button className="btn" onClick={() => setZoom(zoom + 0.05)}>+</button>
-        </div>
-
-        <div className="toolbar-divider" />
-
-        {/* Export */}
-        <div className="toolbar-group">
-          <button className="btn" onClick={handleExportPng}>&#128190; 导出PNG</button>
-          <button className="btn" onClick={handleExportPdf}>&#128196; 导出PDF</button>
-        </div>
-      </div>
-
-      {/* Import Modal */}
+    <EditorChromeContext.Provider value={value}>
+      {children}
       {showModal && (
-        <div className="modal-bg" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}>
+        <div
+          className="modal-bg pn-z-modal"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowModal(false);
+          }}
+        >
           <div className="modal">
             <h3>导入图片素材</h3>
-
-            {/* Upload area */}
             <input
               ref={modalFileRef}
               type="file"
@@ -574,8 +436,13 @@ export const Toolbar: React.FC = () => {
             <div
               className={`upload-area${modalPreviews.length > 0 ? ' has-file' : ''}`}
               onClick={() => void openModalPicker()}
-              onDragOver={(e) => { e.preventDefault(); }}
-              onDrop={(e) => { e.preventDefault(); processModalFiles(Array.from(e.dataTransfer.files)); }}
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                processModalFiles(Array.from(e.dataTransfer.files));
+              }}
             >
               {modalPreviews.length > 0 ? (
                 <div style={{ color: 'var(--success)', fontSize: 13, fontWeight: 600 }}>
@@ -583,7 +450,9 @@ export const Toolbar: React.FC = () => {
                 </div>
               ) : (
                 <div className="upload-text">
-                  点击选择图片 或 拖拽图片到此处<br /><br />
+                  点击选择图片 或 拖拽图片到此处
+                  <br />
+                  <br />
                   <strong>支持 PNG / JPG / SVG / BMP</strong>
                 </div>
               )}
@@ -600,8 +469,6 @@ export const Toolbar: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {/* DPI */}
             <div className="modal-row">
               <label>DPI</label>
               <input
@@ -612,8 +479,6 @@ export const Toolbar: React.FC = () => {
               />
               <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>(影响尺寸换算)</span>
             </div>
-
-            {/* Quantity */}
             <div className="modal-row">
               <label>默认数量</label>
               <input
@@ -622,15 +487,17 @@ export const Toolbar: React.FC = () => {
                 onChange={(e) => setModalQty(Number(e.target.value))}
               />
             </div>
-
-            {/* Actions */}
             <div className="modal-actions">
-              <button className="btn" onClick={() => setShowModal(false)}>取消</button>
-              <button className="btn btn-primary" onClick={addFromModal}>添加到素材列表</button>
+              <button type="button" className="btn" onClick={() => setShowModal(false)}>
+                取消
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => void addFromModal()}>
+                添加到素材列表
+              </button>
             </div>
           </div>
         </div>
       )}
-    </>
+    </EditorChromeContext.Provider>
   );
 };

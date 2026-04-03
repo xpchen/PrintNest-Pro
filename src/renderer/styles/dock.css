@@ -1,0 +1,191 @@
+/* Dock + Rail */
+.left-dock,
+.right-dock {
+  flex-shrink: 0;
+  display: flex;
+  background: var(--surface-panel);
+  border-color: var(--border-default);
+  min-height: 0;
+}
+
+.left-dock {
+  border-right: 1px solid var(--border-default);
+}
+
+.right-dock {
+  border-left: 1px solid var(--border-default);
+}
+
+.left-dock__inner,
+.right-dock__inner {
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  min-width: 0;
+}
+
+.right-dock__inner {
+  flex-direction: row;
+}
+
+.left-dock.is-collapsed .left-dock__inner {
+  width: var(--dock-rail-w);
+}
+
+.left-dock:not(.is-collapsed) .left-dock__inner {
+  width: var(--dock-left-expanded-w);
+}
+
+.right-dock.is-collapsed .right-dock__inner {
+  width: var(--dock-rail-w);
+}
+
+.right-dock:not(.is-collapsed) .right-dock__inner {
+  width: var(--dock-right-expanded-w);
+}
+
+.left-dock.is-peek .left-dock__inner,
+.right-dock.is-peek .right-dock__inner {
+  width: var(--dock-left-expanded-w);
+}
+
+.right-dock.is-peek .right-dock__inner {
+  width: var(--dock-right-expanded-w);
+}
+
+.left-dock__panel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-dock__panel {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.left-dock.is-peek .left-dock__panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--dock-rail-w);
+  width: calc(var(--dock-left-expanded-w) - var(--dock-rail-w));
+  max-width: 85vw;
+  box-shadow: var(--shadow-float);
+  z-index: var(--z-dock-peek);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+}
+
+.right-dock.is-peek .right-dock__panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: var(--dock-rail-w);
+  width: calc(var(--dock-right-expanded-w) - var(--dock-rail-w));
+  max-width: 85vw;
+  box-shadow: var(--shadow-float);
+  z-index: var(--z-dock-peek);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+}
+
+.left-dock {
+  position: relative;
+}
+
+.right-dock {
+  position: relative;
+}
+
+.dock-rail {
+  width: var(--dock-rail-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  background: var(--surface-elevated);
+  border-right: 1px solid var(--border-default);
+}
+
+.dock-rail--right {
+  border-right: none;
+  border-left: 1px solid var(--border-default);
+}
+
+.dock-rail__btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dock-rail__btn:hover {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.dock-rail__btn.is-active {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-soft);
+}
+
+.dock-rail__badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 9px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.dock-rail__pin {
+  margin-top: auto;
+  width: 32px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dock-rail__pin:hover {
+  color: var(--text-primary);
+}
+
+.left-dock__run {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dock-inspector-placeholder__sep {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
+}
