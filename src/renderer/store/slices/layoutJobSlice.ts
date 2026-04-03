@@ -4,11 +4,25 @@ import { executeLayoutJob, withLayoutValidation } from '../../../shared/engine';
 import { buildLayoutSignature } from '../../../shared/layoutSignature';
 import type { AppState, LayoutJobSlice } from '../types';
 
+function findPlacementGlobal(s: AppState, placementId: string): Placement | undefined {
+  if (!s.result) return undefined;
+  for (const c of s.result.canvases) {
+    const p = c.placements.find((x) => x.id === placementId);
+    if (p) return p;
+  }
+  return undefined;
+}
+
 export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice> = (set, get) => ({
   result: null,
   isComputing: false,
   lastLayoutRunId: null,
   layoutProgress: 0,
+  exportPdfCurrentNonce: 0,
+  exportPdfHistoricalNonce: 0,
+  requestExportCurrentPdf: () => set((s) => ({ exportPdfCurrentNonce: s.exportPdfCurrentNonce + 1 })),
+  requestExportHistoricalRunPdf: () =>
+    set((s) => ({ exportPdfHistoricalNonce: s.exportPdfHistoricalNonce + 1 })),
 
   cancelLayoutJob: () => {
     const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
@@ -58,6 +72,8 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
         selectedIds: [],
         layoutSourceSignature,
         lastLayoutRunId: layoutRunId !== undefined ? layoutRunId : get().lastLayoutRunId,
+        manualEdits: [],
+        manualEditNextRevision: 1,
       });
     };
 
@@ -85,6 +101,7 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
   },
 
   toggleLock: (placementId) => {
+    const prev = findPlacementGlobal(get(), placementId);
     set((s) => {
       if (!s.result) return s;
       const newCanvases = s.result.canvases.map((c) => ({
@@ -95,6 +112,16 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
       }));
       return { result: { ...s.result, canvases: newCanvases } };
     });
+    const next = findPlacementGlobal(get(), placementId);
+    if (prev && next && prev.locked !== next.locked) {
+      get().appendManualEdit({
+        sourceRunId: get().lastLayoutRunId,
+        placementId,
+        op: 'lock',
+        before: { locked: prev.locked },
+        after: { locked: next.locked },
+      });
+    }
   },
 
   batchLock: (ids, locked) => {
@@ -137,6 +164,7 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
   },
 
   updatePlacement: (placementId, patch) => {
+    const prev = findPlacementGlobal(get(), placementId);
     set((s) => {
       if (!s.result) return s;
       const newCanvases = s.result.canvases.map((c) => ({
@@ -146,6 +174,31 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
       const next: LayoutResult = { ...s.result, canvases: newCanvases };
       return { result: withLayoutValidation(next, s.items, s.config) };
     });
+    const next = findPlacementGlobal(get(), placementId);
+    if (
+      prev &&
+      next &&
+      ('x' in patch || 'y' in patch) &&
+      (prev.x !== next.x || prev.y !== next.y)
+    ) {
+      get().appendManualEdit({
+        sourceRunId: get().lastLayoutRunId,
+        placementId,
+        op: 'move',
+        before: { x: prev.x, y: prev.y },
+        after: { x: next.x, y: next.y },
+        delta: { dx: next.x - prev.x, dy: next.y - prev.y },
+      });
+    }
+    if (prev && next && 'rotated' in patch && prev.rotated !== next.rotated) {
+      get().appendManualEdit({
+        sourceRunId: get().lastLayoutRunId,
+        placementId,
+        op: 'rotate',
+        before: { rotated: prev.rotated },
+        after: { rotated: next.rotated },
+      });
+    }
   },
 
   alignSelected: (mode) => {

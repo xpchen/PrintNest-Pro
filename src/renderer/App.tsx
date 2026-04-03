@@ -12,9 +12,13 @@ import { StatusBar } from './components/StatusBar';
 import { ProjectHome, readLastProjectId } from './components/project/ProjectHome';
 import { useAppStore } from './store/useAppStore';
 import type { SerializedEditorState } from '../shared/persistence/editorState';
+import { dispatchAppCommand } from './commands/commandRegistry';
 
 export const App: React.FC = () => {
   const uiPhase = useAppStore((s) => s.uiPhase);
+  const leftPanelVisible = useAppStore((s) => s.leftPanelVisible);
+  const rightPanelVisible = useAppStore((s) => s.rightPanelVisible);
+  const statusBarVisible = useAppStore((s) => s.statusBarVisible);
   const saveTimerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -45,6 +49,16 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const api = window.electronAPI;
+    const off = api?.onAppCommand?.((msg) => {
+      dispatchAppCommand(msg.id, msg.payload);
+    });
+    return () => {
+      off?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    const api = window.electronAPI;
     if (!api?.autoSaveProject) return;
 
     const flush = () => {
@@ -57,6 +71,7 @@ export const App: React.FC = () => {
         config: s.config,
         result: s.result,
         layoutSourceSignature: s.layoutSourceSignature,
+        manualEdits: s.manualEdits,
       });
     };
 
@@ -76,7 +91,8 @@ export const App: React.FC = () => {
         state.result !== prev.result ||
         state.layoutSourceSignature !== prev.layoutSourceSignature ||
         state.projectName !== prev.projectName ||
-        state.currentProjectId !== prev.currentProjectId
+        state.currentProjectId !== prev.currentProjectId ||
+        state.manualEdits !== prev.manualEdits
       ) {
         schedule();
       }
@@ -96,11 +112,11 @@ export const App: React.FC = () => {
     <div className="app-layout">
       <Toolbar />
       <div className="app-body">
-        <Sidebar />
+        {leftPanelVisible && <Sidebar />}
         <CanvasArea />
-        <Inspector />
+        {rightPanelVisible && <Inspector />}
       </div>
-      <StatusBar />
+      {statusBarVisible && <StatusBar />}
     </div>
   );
 };

@@ -11,6 +11,7 @@ export const Inspector: React.FC = () => {
     result, selectedIds, items, activeCanvasIndex,
     toggleLock, batchLock, deleteSelected, setSelectedIds,
     updatePlacement, updateItem, duplicateItem, alignSelected,
+    focusRectInCanvas,
   } = useAppStore();
 
   const currentCanvas = result?.canvases[activeCanvasIndex];
@@ -226,6 +227,19 @@ export const Inspector: React.FC = () => {
       <div className="inspector-section">
         <div className="inspector-section-title">操作</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              focusRectInCanvas(
+                { x: sel.x, y: sel.y, width: sel.width, height: sel.height },
+                { mode: 'center', paddingMm: 12 },
+              );
+              showToast('已定位到视口');
+            }}
+          >
+            定位到画布
+          </button>
           <button className="btn" onClick={() => { toggleLock(sel.id); showToast(sel.locked ? '已解锁' : '已锁定'); }}>
             {sel.locked ? '🔓 解锁' : '🔒 锁定'}
           </button>

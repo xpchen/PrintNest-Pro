@@ -4,6 +4,7 @@
  */
 import type { LayoutConfig, LayoutResult, PrintItem } from '../types';
 import { PackingStrategy } from '../types';
+import type { ManualEditPatch } from './manualEdits';
 
 export interface SerializedEditorState {
   projectName: string;
@@ -11,6 +12,8 @@ export interface SerializedEditorState {
   items: PrintItem[];
   result: LayoutResult | null;
   layoutSourceSignature: string | null;
+  /** 手工编辑 patch 序列（与 lastLayoutRunId 语义配合） */
+  manualEdits?: ManualEditPatch[];
 }
 
 export function emptyLayoutConfig(): LayoutConfig {

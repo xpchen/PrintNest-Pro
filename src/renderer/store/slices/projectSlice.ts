@@ -4,6 +4,16 @@ import type { AppState, ProjectSlice } from '../types';
 import { defaultConfig } from '../types';
 import { genId, nextColor } from '../itemUtils';
 import { emptyEditorState } from '../../../shared/persistence/editorState';
+import type { ManualEditPatch } from '../../../shared/persistence/manualEdits';
+
+function nextManualEditRev(edits: ManualEditPatch[]): number {
+  let m = 0;
+  for (const e of edits) {
+    const r = typeof e.revision === 'number' && !Number.isNaN(e.revision) ? e.revision : 0;
+    if (r > m) m = r;
+  }
+  return m + 1;
+}
 
 function initialUiPhase(): 'home' | 'editor' {
   if (typeof window === 'undefined') return 'editor';
@@ -16,9 +26,36 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   projectName: 'default',
   currentProjectId: 'default',
   layoutSourceSignature: null,
+  manualEdits: [],
+  manualEditNextRevision: 1,
   uiPhase: initialUiPhase(),
 
   setUiPhase: (phase) => set({ uiPhase: phase }),
+
+  appendManualEdit: (partial) =>
+    set((s) => {
+      const revision = s.manualEditNextRevision;
+      const patch: ManualEditPatch = {
+        ...partial,
+        revision,
+        updatedAt: new Date().toISOString(),
+      };
+      return { manualEdits: [...s.manualEdits, patch], manualEditNextRevision: revision + 1 };
+    }),
+
+  clearManualEdits: () => set({ manualEdits: [], manualEditNextRevision: 1 }),
+
+  restoreRunAsNewDraft: (payload) =>
+    set({
+      result: payload.result,
+      config: payload.config,
+      layoutSourceSignature: null,
+      selectedIds: [],
+      activeCanvasIndex: 0,
+      lastLayoutRunId: payload.layoutRunId,
+      manualEdits: [],
+      manualEditNextRevision: 1,
+    }),
 
   resetWorkspaceToEmpty: () => {
     const blank = emptyEditorState('default');
@@ -32,25 +69,45 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       isComputing: false,
       layoutProgress: 0,
       lastLayoutRunId: null,
+      exportPdfCurrentNonce: 0,
+      exportPdfHistoricalNonce: 0,
+      runPanelVisible: false,
+      sidebarTab: 'materials',
+      panOffset: { x: 30, y: 10 },
+      viewMode: 'custom',
+      zoom: 0.5,
+      manualEdits: [],
+      manualEditNextRevision: 1,
     });
   },
 
   setProjectName: (name) => set({ projectName: name || '未命名项目' }),
 
-  hydrateFromEditorState: (payload) =>
+  hydrateFromEditorState: (payload) => {
+    const edits = payload.manualEdits ?? [];
     set({
       projectName: payload.projectName,
       items: payload.items,
       config: payload.config,
       result: payload.result,
       layoutSourceSignature: payload.layoutSourceSignature,
+      manualEdits: edits,
+      manualEditNextRevision: nextManualEditRev(edits),
       selectedIds: [],
       activeCanvasIndex: 0,
       uiPhase: 'editor',
       lastLayoutRunId: null,
       layoutProgress: 0,
       isComputing: false,
-    }),
+      exportPdfCurrentNonce: 0,
+      exportPdfHistoricalNonce: 0,
+      runPanelVisible: false,
+      sidebarTab: 'materials',
+      panOffset: { x: 30, y: 10 },
+      viewMode: 'custom',
+      zoom: 0.5,
+    });
+  },
 
   addItem: (partial) => {
     const item: PrintItem = {

@@ -2,7 +2,7 @@
  * 顶部工具栏
  * 导入图片（弹窗模式）| 自动排版 | 策略选择 | 画布设置 | 缩放 | 导出
  */
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { PackingStrategy } from '../../shared/types';
 import type { ImportAssetResult } from '../../shared/persistence/importAssetResult';
@@ -336,6 +336,50 @@ export const Toolbar: React.FC = () => {
       showToast('导出失败: ' + res.error);
     }
   }, [result, items, config, currentProjectId]);
+
+  const importModalNonce = useAppStore((s) => s.importModalNonce);
+  const excelImportNonce = useAppStore((s) => s.excelImportNonce);
+  const exportPdfCurrentNonce = useAppStore((s) => s.exportPdfCurrentNonce);
+  const exportPdfHistoricalNonce = useAppStore((s) => s.exportPdfHistoricalNonce);
+
+  useEffect(() => {
+    if (importModalNonce > 0) openModal();
+  }, [importModalNonce, openModal]);
+
+  useEffect(() => {
+    if (excelImportNonce > 0) void handleImportExcel();
+  }, [excelImportNonce, handleImportExcel]);
+
+  const exportPdfRef = useRef(handleExportPdf);
+  exportPdfRef.current = handleExportPdf;
+  useEffect(() => {
+    if (exportPdfCurrentNonce > 0) void exportPdfRef.current();
+  }, [exportPdfCurrentNonce]);
+
+  useEffect(() => {
+    if (exportPdfHistoricalNonce <= 0) return;
+    void (async () => {
+      const api = window.electronAPI;
+      const st = useAppStore.getState();
+      if (!st.lastLayoutRunId || !api?.exportPdfHistoricalRun || !api?.saveFile) {
+        showToast('无可用历史 Run 或导出不可用');
+        return;
+      }
+      const isPdfOk = await api.isPdfAvailable?.();
+      if (!isPdfOk) {
+        showToast('PDFKit 未安装');
+        return;
+      }
+      const outputPath = await api.saveFile('PrintNest_历史排版.pdf', 'PDF', ['pdf']);
+      if (!outputPath) return;
+      const res = await api.exportPdfHistoricalRun({
+        projectId: st.currentProjectId,
+        layoutRunId: st.lastLayoutRunId,
+        outputPath,
+      });
+      showToast(res.success ? '历史 Run PDF 已导出' : `导出失败: ${res.error ?? ''}`);
+    })();
+  }, [exportPdfHistoricalNonce]);
 
   return (
     <>

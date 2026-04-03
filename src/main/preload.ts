@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('file:loadProject', projectId),
   listProjects: () =>
     ipcRenderer.invoke('file:listProjects'),
+  listProjectSummaries: () => ipcRenderer.invoke('file:listProjectSummaries'),
   deleteProject: (projectId: string) =>
     ipcRenderer.invoke('file:deleteProject', projectId),
   readAsBase64: (filePath: string) =>
@@ -38,9 +39,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   runLayoutJob: (payload: object) => ipcRenderer.invoke('layout:run', payload),
   cancelLayoutJob: () => ipcRenderer.invoke('layout:cancel'),
+  listLayoutRuns: (projectId: string) => ipcRenderer.invoke('layout:listRuns', projectId),
+  getRunRestorePayload: (projectId: string, runId: string, items: unknown[]) =>
+    ipcRenderer.invoke('layout:getRunRestorePayload', projectId, runId, items),
   onLayoutProgress: (cb: (p: { phase: string; pct: number }) => void) => {
     const handler = (_e: unknown, data: { phase: string; pct: number }) => cb(data);
     ipcRenderer.on('layout:progress', handler);
     return () => ipcRenderer.removeListener('layout:progress', handler);
   },
+
+  onAppCommand: (cb: (payload: { id: string; payload?: unknown }) => void) => {
+    const handler = (_e: unknown, data: { id: string; payload?: unknown }) => cb(data);
+    ipcRenderer.on('app:command', handler);
+    return () => ipcRenderer.removeListener('app:command', handler);
+  },
+
+  openProjectFolder: (projectId: string) => ipcRenderer.invoke('shell:openProjectFolder', projectId),
 });

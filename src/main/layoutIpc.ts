@@ -8,6 +8,7 @@ import type { LayoutConfig, LayoutResult, Placement, PrintItem } from '../shared
 import type { LayoutJobInvokeResult, LayoutProgressPayload } from '../shared/ipc/layoutJob';
 import { executeLayoutJob } from '../shared/engine/layoutJob';
 import { tryRecordLayoutRun } from './db/layoutRunRecorder';
+import { getRunRestorePayload, listRecentLayoutRuns } from './db/repositories/layoutRunRepository';
 
 export type LayoutRunPayload = {
   items: PrintItem[];
@@ -98,4 +99,15 @@ export function registerLayoutIpc(): void {
     sendProgress(contents, { phase: 'complete', pct: 100 });
     return { result, layoutRunId };
   });
+
+  ipcMain.handle('layout:listRuns', async (_event, projectId: string) => {
+    return listRecentLayoutRuns(projectId, 50);
+  });
+
+  ipcMain.handle(
+    'layout:getRunRestorePayload',
+    async (_event, projectId: string, runId: string, items: PrintItem[]) => {
+      return getRunRestorePayload(projectId, runId, items);
+    },
+  );
 }

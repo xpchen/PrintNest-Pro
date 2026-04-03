@@ -99,6 +99,13 @@ CREATE INDEX IF NOT EXISTS idx_run_placements_run_id ON run_placements(run_id);
     }
     db.prepare('INSERT INTO schema_migrations (version) VALUES (3)').run();
   }
+  if (v < 4) {
+    const pcols4 = db.prepare(`PRAGMA table_info(projects)`).all() as Array<{ name: string }>;
+    if (!pcols4.some((c) => c.name === 'manual_edits_json')) {
+      db.exec(`ALTER TABLE projects ADD COLUMN manual_edits_json TEXT`);
+    }
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (4)').run();
+  }
 }
 
 /**

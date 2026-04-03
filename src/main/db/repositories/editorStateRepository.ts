@@ -24,6 +24,7 @@ function readLegacyProjectJson(projectId: string): SerializedEditorState | null 
       items,
       result: (raw.result as SerializedEditorState['result']) ?? null,
       layoutSourceSignature: (raw.layoutSourceSignature as string) ?? null,
+      manualEdits: (raw.manualEdits as SerializedEditorState['manualEdits']) ?? undefined,
     };
   } catch {
     return null;
@@ -39,6 +40,7 @@ function writeJsonSnapshot(projectId: string, state: SerializedEditorState): voi
     config: state.config,
     result: state.result,
     layoutSourceSignature: state.layoutSourceSignature,
+    manualEdits: state.manualEdits,
   };
   fs.writeFileSync(fp, JSON.stringify(legacy, null, 2), 'utf-8');
 }
@@ -54,6 +56,7 @@ export function loadEditorState(projectId: string): SerializedEditorState | null
         layout_config_json: string;
         layout_result_json: string | null;
         layout_source_signature: string | null;
+        manual_edits_json: string | null;
       }
     | undefined;
 
@@ -108,12 +111,22 @@ export function loadEditorState(projectId: string): SerializedEditorState | null
     assetId: r.asset_id ?? undefined,
   }));
 
+  let manualEdits: SerializedEditorState['manualEdits'];
+  if (row.manual_edits_json) {
+    try {
+      manualEdits = JSON.parse(row.manual_edits_json) as SerializedEditorState['manualEdits'];
+    } catch {
+      manualEdits = undefined;
+    }
+  }
+
   return {
     projectName: row.name,
     config,
     items,
     result,
     layoutSourceSignature: row.layout_source_signature,
+    manualEdits,
   };
 }
 
@@ -135,15 +148,17 @@ export function saveEditorState(
 
   const now = new Date().toISOString();
   const tx = db.transaction(() => {
+    const meJson = state.manualEdits?.length ? JSON.stringify(state.manualEdits) : null;
     db.prepare(
-      `INSERT INTO projects (id, name, schema_version, created_at, updated_at, layout_config_json, layout_result_json, layout_source_signature)
-       VALUES (@id, @name, 2, @created_at, @updated_at, @cfg, @res, @sig)
+      `INSERT INTO projects (id, name, schema_version, created_at, updated_at, layout_config_json, layout_result_json, layout_source_signature, manual_edits_json)
+       VALUES (@id, @name, 2, @created_at, @updated_at, @cfg, @res, @sig, @me)
        ON CONFLICT(id) DO UPDATE SET
          name = excluded.name,
          updated_at = excluded.updated_at,
          layout_config_json = excluded.layout_config_json,
          layout_result_json = excluded.layout_result_json,
-         layout_source_signature = excluded.layout_source_signature`,
+         layout_source_signature = excluded.layout_source_signature,
+         manual_edits_json = excluded.manual_edits_json`,
     ).run({
       id: projectId,
       name: state.projectName,
@@ -152,6 +167,7 @@ export function saveEditorState(
       cfg: JSON.stringify(state.config),
       res: state.result ? JSON.stringify(state.result) : null,
       sig: state.layoutSourceSignature,
+      me: meJson,
     });
 
     db.prepare('DELETE FROM artwork_items').run();

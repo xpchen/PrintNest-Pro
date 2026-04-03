@@ -16,6 +16,8 @@ export const StatusBar: React.FC = () => {
     cancelLayoutJob,
     lastLayoutRunId,
     currentProjectId,
+    zoom,
+    manualEdits,
   } = useAppStore();
 
   const handleExportHistoricalPdf = useCallback(async () => {
@@ -69,6 +71,14 @@ export const StatusBar: React.FC = () => {
           <span style={{ color: 'var(--danger)' }}> ({unplacedCount} 未排入)</span>
         )}
       </div>
+      <div className="statusbar-item" title="滚轮缩放；菜单「视图」可适应窗口 / 100%">
+        缩放 {(zoom * 100).toFixed(0)}%
+      </div>
+      {manualEdits.length > 0 && (
+        <div className="statusbar-item" title="手工编辑 patch 条数（已纳入自动保存）">
+          手工编辑 {manualEdits.length} 条
+        </div>
+      )}
       {result && val && (errN > 0 || warnN > 0) && (
         <div
           className="statusbar-item"

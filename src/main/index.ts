@@ -1,11 +1,17 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import * as path from 'path';
 import { registerFileManagerIPC } from './fileManager';
 import { registerPdfExportIPC } from './pdfExport';
 import { registerExcelImportIPC } from './excelImport';
 import { registerLayoutIpc } from './layoutIpc';
+import { createApplicationMenu } from './appMenu';
+import { getProjectDirectory } from './projectPaths';
 
 let mainWindow: BrowserWindow | null = null;
+
+function getMainWindow(): BrowserWindow | null {
+  return mainWindow;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -47,6 +53,8 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  createApplicationMenu(getMainWindow);
 }
 
 // IPC: Open file dialog for importing assets
@@ -77,6 +85,13 @@ ipcMain.handle('dialog:openExcel', async () => {
   return result.canceled ? [] : result.filePaths;
 });
 
+ipcMain.handle('shell:openProjectFolder', async (_e, projectId: string) => {
+  if (!projectId) return false;
+  const dir = getProjectDirectory(projectId);
+  const err = await shell.openPath(dir);
+  return err === '';
+});
+
 // Register file manager & PDF export IPC handlers
 registerFileManagerIPC();
 registerPdfExportIPC();
@@ -94,5 +109,6 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
+    createApplicationMenu(getMainWindow);
   }
 });

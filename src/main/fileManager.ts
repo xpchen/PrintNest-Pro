@@ -24,6 +24,8 @@ import type { SerializedEditorState } from '../shared/persistence/editorState';
 import { emptyEditorState } from '../shared/persistence/editorState';
 import type { ImportAssetResult } from '../shared/persistence/importAssetResult';
 import { getOrOpenProjectDb, closeProjectDb } from './db/projectDb';
+import { listRecentLayoutRuns } from './db/repositories/layoutRunRepository';
+import { summarizeLayoutConfigFingerprint } from '../shared/layoutConfigFingerprint';
 
 export { getProjectDirectory, ensureProjectLayout } from './projectPaths';
 
@@ -74,7 +76,65 @@ function payloadToEditorState(projectId: string, data: object): SerializedEditor
     items: (d.items as SerializedEditorState['items']) ?? [],
     result: (d.result as SerializedEditorState['result']) ?? null,
     layoutSourceSignature: (d.layoutSourceSignature as string) ?? null,
+    manualEdits: (d.manualEdits as SerializedEditorState['manualEdits']) ?? undefined,
   };
+}
+
+export type ProjectListSummary = {
+  id: string;
+  name: string;
+  updatedAt: string;
+  canvasW: number;
+  canvasH: number;
+  placementCount: number;
+  lastRunUtil: number | null;
+  lastRunAt: string | null;
+  fingerprint: string;
+};
+
+function listProjectSummaries(): ProjectListSummary[] {
+  const root = getAppDataProjectsRoot();
+  if (!fs.existsSync(root)) return [];
+  const names = fs.readdirSync(root);
+  const out: ProjectListSummary[] = [];
+  for (const id of names) {
+    const dir = path.join(root, id);
+    try {
+      if (!fs.statSync(dir).isDirectory()) continue;
+    } catch {
+      continue;
+    }
+    const st = loadEditorState(id);
+    if (!st?.config) continue;
+    let placementCount = 0;
+    if (st.result) {
+      for (const c of st.result.canvases) placementCount += c.placements.length;
+    }
+    const runs = listRecentLayoutRuns(id, 1);
+    const last = runs[0];
+    let updatedAt = new Date().toISOString();
+    try {
+      updatedAt = fs.statSync(path.join(dir, 'project.db')).mtime.toISOString();
+    } catch {
+      try {
+        updatedAt = fs.statSync(path.join(dir, 'project.json')).mtime.toISOString();
+      } catch {
+        /* keep default */
+      }
+    }
+    out.push({
+      id,
+      name: st.projectName,
+      updatedAt,
+      canvasW: st.config.canvas.width,
+      canvasH: st.config.canvas.height,
+      placementCount,
+      lastRunUtil: last?.utilization ?? null,
+      lastRunAt: last?.created_at ?? null,
+      fingerprint: summarizeLayoutConfigFingerprint(st.config),
+    });
+  }
+  return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 /** 保存项目：写入 project.db（权威）+ project.json（阶段 1 保险快照） */
@@ -174,6 +234,8 @@ export function registerFileManagerIPC(): void {
   ipcMain.handle('file:listProjects', async () => {
     return listProjects();
   });
+
+  ipcMain.handle('file:listProjectSummaries', async () => listProjectSummaries());
 
   // 删除项目
   ipcMain.handle('file:deleteProject', async (_event, projectId: string) => {

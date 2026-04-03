@@ -7,6 +7,9 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Placement } from '../../shared/types';
 import { buildLayoutSignature } from '../../shared/layoutSignature';
+import { CanvasViewControls } from './canvas/CanvasViewControls';
+import { CanvasMiniMap } from './canvas/CanvasMiniMap';
+import { SegmentNavigator } from './canvas/SegmentNavigator';
 
 // ==================== Image Cache ====================
 const imageCache = new Map<string, HTMLImageElement>();
@@ -77,6 +80,7 @@ export const CanvasArea: React.FC = () => {
     result, config, items, activeCanvasIndex, selectedIds, zoom, layoutSourceSignature,
     showGrid, showRuler, showSafeMargin,
     setActiveCanvas, setSelectedIds, toggleLock, updatePlacement, deleteSelected,
+    panOffset, setPanOffset,
   } = useAppStore();
 
   const [invalidDragTick, setInvalidDragTick] = useState(0);
@@ -87,7 +91,6 @@ export const CanvasArea: React.FC = () => {
     layoutSourceSignature !== null &&
     buildLayoutSignature(items, config) !== layoutSourceSignature;
 
-  const [offset, setOffset] = useState({ x: 30, y: 10 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
@@ -159,6 +162,21 @@ export const CanvasArea: React.FC = () => {
     });
   }, [items]);
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      useAppStore.getState().setViewportContainerPx(w, h);
+      const vm = useAppStore.getState().viewMode;
+      if (vm === 'fitAll') useAppStore.getState().applyViewFitAll();
+      if (vm === 'fitWidth') useAppStore.getState().applyViewFitWidth();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   /** Draw canvas */
   const draw = useCallback(() => {
     void imgLoadCount;
@@ -167,6 +185,11 @@ export const CanvasArea: React.FC = () => {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
+    const t0 =
+      import.meta.env.DEV && (window as unknown as { __PN_PERF__?: boolean }).__PN_PERF__
+        ? performance.now()
+        : 0;
+
     const container = containerRef.current;
     if (container) {
       canvas.width = container.clientWidth;
@@ -174,7 +197,18 @@ export const CanvasArea: React.FC = () => {
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const z = zoom, ox = offset.x, oy = offset.y;
+    const z = zoom;
+    const ox = panOffset.x;
+    const oy = panOffset.y;
+    const vw = canvas.width;
+    const vh = canvas.height;
+    const cullMarginMm = 48;
+    const viewLeft = (-ox) / z - cullMarginMm;
+    const viewTop = (-oy) / z - cullMarginMm;
+    const viewRight = (vw - ox) / z + cullMarginMm;
+    const viewBottom = (vh - oy) / z + cullMarginMm;
+    const placementVisible = (p: Placement) =>
+      p.x + p.width >= viewLeft && p.x <= viewRight && p.y + p.height >= viewTop && p.y <= viewBottom;
 
     ctx.save();
     ctx.translate(ox, oy);
@@ -239,10 +273,11 @@ export const CanvasArea: React.FC = () => {
     ctx.restore();
     ctx.textAlign = 'start';
 
-    // Draw placements
+    // Draw placements（视口裁剪；选中项始终绘制）
     if (currentCanvas) {
       for (const p of currentCanvas.placements) {
         const isSel = selectedIds.includes(p.id);
+        if (!placementVisible(p) && !isSel) continue;
         const item = getItem(p.printItemId);
         const img = item?.imageSrc ? imageCache.get(item.imageSrc) : null;
         const warnVal = validationIssueIds.has(p.id);
@@ -409,12 +444,21 @@ export const CanvasArea: React.FC = () => {
       ctx.setLineDash([]);
       ctx.restore();
     }
+
+    if (
+      import.meta.env.DEV &&
+      t0 > 0 &&
+      (window as unknown as { __PN_PERF__?: boolean }).__PN_PERF__
+    ) {
+      const dt = performance.now() - t0;
+      if (dt > 16) console.debug('[perf] draw ms', dt.toFixed(1));
+    }
   }, [
     currentCanvas,
     canvasW,
     canvasH,
     zoom,
-    offset,
+    panOffset,
     selectedIds,
     getItem,
     result,
@@ -456,15 +500,15 @@ export const CanvasArea: React.FC = () => {
       const canvas = canvasRef.current;
       if (!canvas || !currentCanvas) return null;
       const rect = canvas.getBoundingClientRect();
-      const mx = (clientX - rect.left - offset.x) / zoom;
-      const my = (clientY - rect.top - offset.y) / zoom;
+      const mx = (clientX - rect.left - panOffset.x) / zoom;
+      const my = (clientY - rect.top - panOffset.y) / zoom;
       for (let i = currentCanvas.placements.length - 1; i >= 0; i--) {
         const p = currentCanvas.placements[i];
         if (mx >= p.x && mx <= p.x + p.width && my >= p.y && my <= p.y + p.height) return p;
       }
       return null;
     },
-    [currentCanvas, offset, zoom]
+    [currentCanvas, panOffset, zoom]
   );
 
   /** Box select intersection */
@@ -492,7 +536,7 @@ export const CanvasArea: React.FC = () => {
       // Middle button or Alt+left = pan
       if (e.button === 1 || (e.button === 0 && e.altKey)) {
         setIsPanning(true);
-        setPanStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
+        setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
         return;
       }
 
@@ -517,8 +561,8 @@ export const CanvasArea: React.FC = () => {
           if (!hit.locked && currentCanvas) {
             setIsDragging(true);
             dragStartRef.current = {
-              x: (e.clientX - rect.left - offset.x) / zoom,
-              y: (e.clientY - rect.top - offset.y) / zoom,
+              x: (e.clientX - rect.left - panOffset.x) / zoom,
+              y: (e.clientY - rect.top - panOffset.y) / zoom,
             };
             const currentSelectedIds = selectedIds.includes(hit.id) ? selectedIds : [hit.id];
             dragOrigRef.current = currentCanvas.placements
@@ -529,21 +573,21 @@ export const CanvasArea: React.FC = () => {
           // Empty area click = start box selection
           if (!e.shiftKey) setSelectedIds([]);
           setIsBoxSelecting(true);
-          const wx = (mx - offset.x) / zoom;
-          const wy = (my - offset.y) / zoom;
+          const wx = (mx - panOffset.x) / zoom;
+          const wy = (my - panOffset.y) / zoom;
           boxStartRef.current = { x: wx, y: wy };
           setBoxEnd({ x: wx, y: wy });
         }
       }
     },
-    [hitTest, selectedIds, setSelectedIds, offset, zoom, currentCanvas]
+    [hitTest, selectedIds, setSelectedIds, panOffset, zoom, currentCanvas]
   );
 
   /** Mouse move */
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (isPanning) {
-        setOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+        setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
         return;
       }
 
@@ -552,8 +596,8 @@ export const CanvasArea: React.FC = () => {
       const rect = canvas.getBoundingClientRect();
 
       if (isBoxSelecting) {
-        const mx = (e.clientX - rect.left - offset.x) / zoom;
-        const my = (e.clientY - rect.top - offset.y) / zoom;
+        const mx = (e.clientX - rect.left - panOffset.x) / zoom;
+        const my = (e.clientY - rect.top - panOffset.y) / zoom;
         setBoxEnd({ x: mx, y: my });
         const hits = boxSelect(boxStartRef.current.x, boxStartRef.current.y, mx, my);
         setSelectedIds(hits.map((h) => h.id));
@@ -561,8 +605,8 @@ export const CanvasArea: React.FC = () => {
       }
 
       if (isDragging && dragOrigRef.current.length > 0 && currentCanvas) {
-        const mx = (e.clientX - rect.left - offset.x) / zoom;
-        const my = (e.clientY - rect.top - offset.y) / zoom;
+        const mx = (e.clientX - rect.left - panOffset.x) / zoom;
+        const my = (e.clientY - rect.top - panOffset.y) / zoom;
         const dx = mx - dragStartRef.current.x;
         const dy = my - dragStartRef.current.y;
         const snap = useAppStore.getState().snapMm;
@@ -582,7 +626,7 @@ export const CanvasArea: React.FC = () => {
         }
       }
     },
-    [isPanning, panStart, isBoxSelecting, isDragging, offset, zoom, boxSelect, setSelectedIds, currentCanvas, canvasW, canvasH, updatePlacement]
+    [isPanning, panStart, isBoxSelecting, isDragging, panOffset, zoom, setPanOffset, boxSelect, setSelectedIds, currentCanvas, canvasW, canvasH, updatePlacement]
   );
 
   /** Mouse up */
@@ -704,6 +748,9 @@ export const CanvasArea: React.FC = () => {
           onMouseLeave={handleMouseUp}
           onContextMenu={handleContextMenu}
         />
+        <CanvasViewControls />
+        <SegmentNavigator />
+        <CanvasMiniMap />
       </div>
     </div>
   );

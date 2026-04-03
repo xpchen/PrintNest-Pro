@@ -4,10 +4,14 @@
  */
 import React, { useCallback, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { PrintItem } from '../../shared/types';
+import { PrintItem, type LayoutValidationIssue } from '../../shared/types';
+import { RunPanel } from './RunPanel';
 
 export const Sidebar: React.FC = () => {
-  const { items, removeItem, updateItem, clearItems, setSelectedIds, selectedIds, result, activeCanvasIndex } = useAppStore();
+  const {
+    items, removeItem, updateItem, clearItems, setSelectedIds, selectedIds, result, activeCanvasIndex,
+    sidebarTab, setSidebarTab, setActiveCanvas, focusRectInCanvas,
+  } = useAppStore();
 
   /** Determine which printItemIds are selected on canvas */
   const selectedItemIds = new Set<string>();
@@ -54,6 +58,29 @@ export const Sidebar: React.FC = () => {
     if (confirm('清空所有素材？')) clearItems();
   }, [clearItems]);
 
+  const jumpToValidationIssue = useCallback(
+    (issue: LayoutValidationIssue) => {
+      if (!result) return;
+      setActiveCanvas(issue.canvasIndex);
+      const canvas = result.canvases[issue.canvasIndex];
+      if (!canvas) return;
+      const ids = issue.placementIds ?? [];
+      setSelectedIds(ids);
+      if (ids.length === 0) return;
+      const placements = canvas.placements.filter((p) => ids.includes(p.id));
+      if (placements.length === 0) return;
+      const minX = Math.min(...placements.map((p) => p.x));
+      const minY = Math.min(...placements.map((p) => p.y));
+      const maxX = Math.max(...placements.map((p) => p.x + p.width));
+      const maxY = Math.max(...placements.map((p) => p.y + p.height));
+      focusRectInCanvas(
+        { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+        { mode: 'center', paddingMm: 8 },
+      );
+    },
+    [result, setActiveCanvas, setSelectedIds, focusRectInCanvas],
+  );
+
   /** Click sidebar item → highlight its instances on canvas */
   const handleItemClick = useCallback((itemId: string) => {
     if (!result) return;
@@ -91,16 +118,46 @@ export const Sidebar: React.FC = () => {
     }
   }, []);
 
+  const validationIssues = result?.validation?.issues ?? [];
+
   return (
     <div className="sidebar">
-      <div className="sidebar-header">
-        <span>素材列表 ({items.length})</span>
-        {items.length > 0 && (
-          <button className="icon-btn" style={{ fontSize: 11 }} onClick={handleClear}>
-            清空
-          </button>
-        )}
+      <div className="sidebar-tabs">
+        <button
+          type="button"
+          className={`sidebar-tab${sidebarTab === 'materials' ? ' active' : ''}`}
+          onClick={() => setSidebarTab('materials')}
+        >
+          素材
+        </button>
+        <button
+          type="button"
+          className={`sidebar-tab${sidebarTab === 'validation' ? ' active' : ''}`}
+          onClick={() => setSidebarTab('validation')}
+        >
+          校验{validationIssues.length > 0 ? ` (${validationIssues.length})` : ''}
+        </button>
+        <button
+          type="button"
+          className={`sidebar-tab${sidebarTab === 'run' ? ' active' : ''}`}
+          onClick={() => setSidebarTab('run')}
+        >
+          Run
+        </button>
       </div>
+
+      {sidebarTab === 'materials' && (
+        <div className="sidebar-header">
+          <span>素材列表 ({items.length})</span>
+          {items.length > 0 && (
+            <button className="icon-btn" style={{ fontSize: 11 }} onClick={handleClear}>
+              清空
+            </button>
+          )}
+        </div>
+      )}
+
+      {sidebarTab === 'materials' && (
       <div className="sidebar-list" onDragOver={handleDragOver} onDrop={handleDrop}>
         {items.length === 0 ? (
           <div className="empty-state" style={{ height: 200 }}>
@@ -154,6 +211,40 @@ export const Sidebar: React.FC = () => {
           ))
         )}
       </div>
+      )}
+
+      {sidebarTab === 'validation' && (
+        <div className="sidebar-list sidebar-list--validation">
+          {!result?.validation || validationIssues.length === 0 ? (
+            <div className="empty-state" style={{ height: 160 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>暂无校验问题</div>
+            </div>
+          ) : (
+            <ul className="validation-issue-list">
+              {validationIssues.map((issue, idx) => (
+                <li key={`${issue.kind}-${idx}`}>
+                  <button
+                    type="button"
+                    className="validation-issue-row"
+                    onClick={() => jumpToValidationIssue(issue)}
+                  >
+                    <span className={`validation-issue-sev validation-issue-sev--${issue.severity}`}>
+                      {issue.severity === 'error' ? '错误' : '提示'}
+                    </span>
+                    <span className="validation-issue-msg">{issue.message}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {sidebarTab === 'run' && (
+        <div className="sidebar-list sidebar-list--run">
+          <RunPanel />
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editingItem && (

@@ -23,6 +23,19 @@ declare global {
     autoSaveProject?: (projectId: string, data: object) => Promise<boolean>;
     loadProject: (projectId: string) => Promise<object | null>;
     listProjects: () => Promise<string[]>;
+    listProjectSummaries?: () => Promise<
+      Array<{
+        id: string;
+        name: string;
+        updatedAt: string;
+        canvasW: number;
+        canvasH: number;
+        placementCount: number;
+        lastRunUtil: number | null;
+        lastRunAt: string | null;
+        fingerprint: string;
+      }>
+    >;
     deleteProject: (projectId: string) => Promise<boolean>;
     readAsBase64: (filePath: string) => Promise<string | null>;
     parseExcelImport: (filePath: string) => Promise<ExcelImportResult>;
@@ -40,7 +53,26 @@ declare global {
       projectId?: string;
     }) => Promise<LayoutJobInvokeResult>;
     cancelLayoutJob?: () => Promise<boolean>;
+    listLayoutRuns?: (projectId: string) => Promise<
+      Array<{
+        id: string;
+        created_at: string;
+        duration_ms: number;
+        utilization: number;
+        unplaced_count: number;
+        canvas_count: number;
+        config_snapshot_json: string;
+        placement_count?: number;
+      }>
+    >;
+    getRunRestorePayload?: (
+      projectId: string,
+      runId: string,
+      items: PrintItem[],
+    ) => Promise<{ result: LayoutResult; config: LayoutConfig } | null>;
     onLayoutProgress?: (cb: (p: { phase: string; pct: number }) => void) => () => void;
+    onAppCommand?: (cb: (payload: { id: string; payload?: unknown }) => void) => () => void;
+    openProjectFolder?: (projectId: string) => Promise<boolean>;
   }
 
   interface Window {

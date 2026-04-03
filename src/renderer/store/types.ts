@@ -1,9 +1,13 @@
 import type { PrintItem, Placement, LayoutConfig, LayoutResult } from '../../shared/types';
 import { PackingStrategy } from '../../shared/types';
+import type { ManualEditPatch } from '../../shared/persistence/manualEdits';
 
 export interface ProjectSlice {
   items: PrintItem[];
   config: LayoutConfig;
+  /** 手工编辑 patch 序列 */
+  manualEdits: ManualEditPatch[];
+  manualEditNextRevision: number;
   /** 显示用项目名（与目录 id 可不同） */
   projectName: string;
   currentProjectId: string;
@@ -15,6 +19,15 @@ export interface ProjectSlice {
     items: PrintItem[];
     result: LayoutResult | null;
     layoutSourceSignature: string | null;
+    manualEdits?: ManualEditPatch[];
+  }) => void;
+  appendManualEdit: (patch: Omit<ManualEditPatch, 'revision' | 'updatedAt'>) => void;
+  clearManualEdits: () => void;
+  /** 将历史 run 恢复为当前可编辑草稿（清空 manual_edits） */
+  restoreRunAsNewDraft: (payload: {
+    result: LayoutResult;
+    config: LayoutConfig;
+    layoutRunId: string;
   }) => void;
   addItem: (
     item: Omit<PrintItem, 'id' | 'color' | 'priority' | 'allowRotation' | 'spacing' | 'bleed'> & Partial<PrintItem>,
@@ -39,6 +52,8 @@ export interface SelectionSlice {
 
 export type AlignMode = 'left' | 'right' | 'top' | 'bottom' | 'hcenter' | 'vcenter';
 
+export type CanvasViewMode = 'fitAll' | 'fitWidth' | 'actual' | 'custom';
+
 export interface CanvasViewSlice {
   activeCanvasIndex: number;
   zoom: number;
@@ -46,12 +61,60 @@ export interface CanvasViewSlice {
   showRuler: boolean;
   showSafeMargin: boolean;
   snapMm: number;
+  viewMode: CanvasViewMode;
+  /** 画布原点 (0,0) 在视图像素中的位置；见 viewportContract.md */
+  panOffset: { x: number; y: number };
+  overviewVisible: boolean;
+  segmentSizeMm: number;
+  activeSegmentIndex: number;
+  viewportContainerPx: { width: number; height: number };
+
+  leftPanelVisible: boolean;
+  rightPanelVisible: boolean;
+  statusBarVisible: boolean;
+
+  importModalNonce: number;
+  excelImportNonce: number;
+  runPanelVisible: boolean;
+  /** 左侧栏当前 Tab */
+  sidebarTab: 'materials' | 'validation' | 'run';
+
   setActiveCanvas: (index: number) => void;
   setZoom: (zoom: number) => void;
   setShowGrid: (v: boolean) => void;
   setShowRuler: (v: boolean) => void;
   setShowSafeMargin: (v: boolean) => void;
   setSnapMm: (mm: number) => void;
+
+  setPanOffset: (p: { x: number; y: number }) => void;
+  setViewportContainerPx: (width: number, height: number) => void;
+  setOverviewVisible: (v: boolean) => void;
+  setSegmentSizeMm: (mm: number) => void;
+  setActiveSegmentIndex: (i: number) => void;
+
+  applyViewFitAll: () => void;
+  applyViewFitWidth: () => void;
+  applyViewActual100: () => void;
+
+  toggleLeftPanel: () => void;
+  toggleRightPanel: () => void;
+  toggleStatusBar: () => void;
+  toggleRunPanel: () => void;
+  setRunPanelVisible: (v: boolean) => void;
+  setSidebarTab: (t: 'materials' | 'validation' | 'run') => void;
+
+  requestImportImages: () => void;
+  requestImportExcel: () => void;
+
+  focusRectInCanvas: (
+    rect: { x: number; y: number; width: number; height: number },
+    opts: { mode: 'center' | 'top'; paddingMm?: number; paddingPx?: number },
+  ) => void;
+
+  jumpViewHead: () => void;
+  jumpViewMid: () => void;
+  jumpViewTail: () => void;
+  jumpToSegment: (index: number) => void;
 }
 
 export interface LayoutJobSlice {
@@ -61,6 +124,12 @@ export interface LayoutJobSlice {
   lastLayoutRunId: string | null;
   /** 0–100，会话态不入自动保存 */
   layoutProgress: number;
+  /** 菜单/命令触发 PDF 导出（Toolbar 监听 nonce） */
+  exportPdfCurrentNonce: number;
+  exportPdfHistoricalNonce: number;
+  requestExportCurrentPdf: () => void;
+  requestExportHistoricalRunPdf: () => void;
+
   runAutoLayout: () => Promise<void>;
   cancelLayoutJob: () => void;
   toggleLock: (placementId: string) => void;
