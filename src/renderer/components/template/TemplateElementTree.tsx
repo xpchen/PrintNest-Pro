@@ -1,7 +1,7 @@
 /**
- * 左栏下部：元素层级树 — 选中/锁定/隐藏/删除
+ * 左栏下部：元素层级树 — 选中/锁定/隐藏/删除/拖拽排序
  */
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { TemplateElement } from '../../../shared/types';
 
@@ -22,9 +22,15 @@ export const TemplateElementTree: React.FC = () => {
   const selectElements = useAppStore((s) => s.selectElements);
   const updateElement = useAppStore((s) => s.updateElement);
   const removeElement = useAppStore((s) => s.removeElement);
+  const reorderElements = useAppStore((s) => s.reorderElements);
 
   const currentTemplate = templates.find((t) => t.id === currentTemplateId);
   const elements = currentTemplate?.elements ?? [];
+  // 显示顺序：反转（顶部=前景）
+  const displayElements = [...elements].reverse();
+
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
 
   const handleSelect = useCallback(
     (id: string, multi: boolean) => {
@@ -64,6 +70,46 @@ export const TemplateElementTree: React.FC = () => {
     [currentTemplateId, removeElement],
   );
 
+  // ── 拖拽排序 ──
+  const handleDragStart = useCallback((idx: number, e: React.DragEvent) => {
+    setDragIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(idx));
+  }, []);
+
+  const handleDragOver = useCallback((idx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropIdx(idx);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDropIdx(null);
+  }, []);
+
+  const handleDrop = useCallback(
+    (targetIdx: number, e: React.DragEvent) => {
+      e.preventDefault();
+      setDropIdx(null);
+      setDragIdx(null);
+      if (dragIdx == null || dragIdx === targetIdx || !currentTemplateId) return;
+
+      // displayElements 是 reversed，转回原始顺序
+      const reordered = [...displayElements];
+      const [moved] = reordered.splice(dragIdx, 1);
+      reordered.splice(targetIdx, 0, moved);
+      // 反转回原始存储顺序
+      const newOrder = [...reordered].reverse().map((el) => el.id);
+      reorderElements(currentTemplateId, newOrder);
+    },
+    [dragIdx, displayElements, currentTemplateId, reorderElements],
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setDragIdx(null);
+    setDropIdx(null);
+  }, []);
+
   if (!currentTemplate) {
     return <div className="tpl-tree tpl-tree--empty">选择模板后显示元素</div>;
   }
@@ -77,12 +123,20 @@ export const TemplateElementTree: React.FC = () => {
         <div className="tpl-tree__empty-hint">暂无元素，在画布中添加</div>
       ) : (
         <ul className="tpl-tree__list">
-          {[...elements].reverse().map((el) => {
+          {displayElements.map((el, idx) => {
             const selected = selectedElementIds.includes(el.id);
+            const isDropTarget = dropIdx === idx && dragIdx !== idx;
             return (
               <li
                 key={el.id}
-                className={`tpl-tree__item ${selected ? 'tpl-tree__item--selected' : ''} ${el.hidden ? 'tpl-tree__item--hidden' : ''}`}
+                className={`tpl-tree__item ${selected ? 'tpl-tree__item--selected' : ''} ${el.hidden ? 'tpl-tree__item--hidden' : ''} ${isDropTarget ? 'tpl-tree__item--drop-target' : ''}`}
+                draggable
+                onDragStart={(e) => handleDragStart(idx, e)}
+                onDragOver={(e) => handleDragOver(idx, e)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(idx, e)}
+                onDragEnd={handleDragEnd}
+                style={{ opacity: dragIdx === idx ? 0.4 : undefined }}
               >
                 <button
                   type="button"

@@ -153,7 +153,7 @@ function loadTemplateInstances(db: Database): TemplateInstance[] {
 function saveDataRecords(db: Database, records: DataRecord[]): void {
   db.prepare('DELETE FROM data_records').run();
   const ins = db.prepare(
-    `INSERT INTO data_records (id, source_session_id, source_row_index, fields_json, qty, source_name, source_sheet, created_at, updated_at)
+    `INSERT OR REPLACE INTO data_records (id, source_session_id, source_row_index, fields_json, qty, source_name, source_sheet, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const r of records) {
@@ -174,7 +174,7 @@ function saveDataRecords(db: Database, records: DataRecord[]): void {
 function saveTemplateDefinitions(db: Database, templates: TemplateDefinition[]): void {
   db.prepare('DELETE FROM template_definitions').run();
   const ins = db.prepare(
-    `INSERT INTO template_definitions (id, name, description, category, version, status, canvas_mode, width_mm, height_mm, elements_json, validation_rules_json, created_at, updated_at)
+    `INSERT OR REPLACE INTO template_definitions (id, name, description, category, version, status, canvas_mode, width_mm, height_mm, elements_json, validation_rules_json, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const t of templates) {
@@ -199,7 +199,7 @@ function saveTemplateDefinitions(db: Database, templates: TemplateDefinition[]):
 function saveTemplateInstances(db: Database, instances: TemplateInstance[]): void {
   db.prepare('DELETE FROM template_instances').run();
   const ins = db.prepare(
-    `INSERT INTO template_instances (id, template_id, record_id, resolved_width_mm, resolved_height_mm, render_payload_json, status, validation_errors_json, resolved_elements_json, snapshot_hash, created_at, updated_at)
+    `INSERT OR REPLACE INTO template_instances (id, template_id, record_id, resolved_width_mm, resolved_height_mm, render_payload_json, status, validation_errors_json, resolved_elements_json, snapshot_hash, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const i of instances) {

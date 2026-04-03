@@ -39,7 +39,7 @@ const ALL_FIELDS: ImportFieldKey[] = [
 type OutputMode = 'layout' | 'dataRecord';
 
 function newRecordId(): string {
-  return `rec_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  return `rec_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export const ImportMappingModal: React.FC<ImportMappingModalProps> = ({
