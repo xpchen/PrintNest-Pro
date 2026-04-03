@@ -55,4 +55,56 @@ export const createTemplateSlice: StateCreator<AppState, [], [], TemplateSlice> 
   setPreviewRecordId: (id) => set({ previewRecordId: id }),
 
   setTemplateInstances: (instances) => set({ templateInstances: instances }),
+
+  addElement: (templateId, element) =>
+    set((s) => ({
+      templates: s.templates.map((t) =>
+        t.id === templateId
+          ? { ...t, elements: [...t.elements, element], updatedAt: new Date().toISOString() }
+          : t,
+      ),
+    })),
+
+  updateElement: (templateId, elementId, patch) =>
+    set((s) => ({
+      templates: s.templates.map((t) =>
+        t.id === templateId
+          ? {
+              ...t,
+              elements: t.elements.map((el) =>
+                el.id === elementId ? ({ ...el, ...patch } as typeof el) : el,
+              ),
+              updatedAt: new Date().toISOString(),
+            }
+          : t,
+      ),
+    })),
+
+  removeElement: (templateId, elementId) =>
+    set((s) => ({
+      templates: s.templates.map((t) =>
+        t.id === templateId
+          ? {
+              ...t,
+              elements: t.elements.filter((el) => el.id !== elementId),
+              updatedAt: new Date().toISOString(),
+            }
+          : t,
+      ),
+      selectedElementIds: s.selectedElementIds.filter((id) => id !== elementId),
+    })),
+
+  reorderElements: (templateId, orderedIds) =>
+    set((s) => ({
+      templates: s.templates.map((t) => {
+        if (t.id !== templateId) return t;
+        const map = new Map(t.elements.map((el) => [el.id, el]));
+        const reordered = orderedIds.map((id) => map.get(id)).filter(Boolean) as typeof t.elements;
+        // 未在 orderedIds 中的元素追加到末尾
+        for (const el of t.elements) {
+          if (!orderedIds.includes(el.id)) reordered.push(el);
+        }
+        return { ...t, elements: reordered, updatedAt: new Date().toISOString() };
+      }),
+    })),
 });

@@ -1,4 +1,4 @@
-import type { PrintItem, Placement, LayoutConfig, LayoutResult, DataRecord, TemplateDefinition, TemplateInstance } from '../../shared/types';
+import type { PrintItem, Placement, LayoutConfig, LayoutResult, DataRecord, TemplateDefinition, TemplateInstance, TemplateElement } from '../../shared/types';
 import { PackingStrategy } from '../../shared/types';
 import type { ManualEditPatch } from '../../shared/persistence/manualEdits';
 import type { DisplayLengthUnit } from '../utils/lengthDisplay';
@@ -193,6 +193,12 @@ export interface TemplateSlice {
   selectElements: (ids: string[]) => void;
   setPreviewRecordId: (id: string | null) => void;
   setTemplateInstances: (instances: TemplateInstance[]) => void;
+
+  /** 元素 CRUD（操作当前模板的 elements） */
+  addElement: (templateId: string, element: TemplateElement) => void;
+  updateElement: (templateId: string, elementId: string, patch: Partial<TemplateElement>) => void;
+  removeElement: (templateId: string, elementId: string) => void;
+  reorderElements: (templateId: string, orderedIds: string[]) => void;
 }
 
 export type AppState = ProjectSlice & SelectionSlice & CanvasViewSlice & LayoutJobSlice & UiShellSlice & TemplateSlice;
