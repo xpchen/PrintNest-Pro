@@ -6,6 +6,15 @@ import { registerExcelImportIPC } from './excelImport';
 import { registerLayoutIpc } from './layoutIpc';
 import { createApplicationMenu } from './appMenu';
 import { getProjectDirectory } from './projectPaths';
+import { log } from '../shared/logger';
+
+/* ── 全局异常捕获 ── */
+process.on('uncaughtException', (err) => {
+  log.app.error('uncaughtException', err);
+});
+process.on('unhandledRejection', (reason) => {
+  log.app.error('unhandledRejection', reason);
+});
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -92,13 +101,32 @@ ipcMain.handle('shell:openProjectFolder', async (_e, projectId: string) => {
   return err === '';
 });
 
+// 渲染进程日志 IPC（供 renderer 通过 preload 调用）
+ipcMain.handle('log:error', (_e, ...args: unknown[]) => {
+  log.app.error('[renderer]', ...args);
+});
+ipcMain.handle('log:warn', (_e, ...args: unknown[]) => {
+  log.app.warn('[renderer]', ...args);
+});
+
 // Register file manager & PDF export IPC handlers
 registerFileManagerIPC();
 registerPdfExportIPC();
 registerExcelImportIPC();
 registerLayoutIpc();
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  log.app.info('app ready, creating window');
+  createWindow();
+});
+
+app.on('render-process-gone', (_event, _wc, details) => {
+  log.app.error('renderer process gone', details);
+});
+
+app.on('before-quit', () => {
+  log.app.info('app quitting');
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

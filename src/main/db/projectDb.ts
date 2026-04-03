@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import * as path from 'path';
 import { getProjectDirectory, ensureProjectLayout } from '../projectPaths';
+import { log } from '../../shared/logger';
 
 const dbCache = new Map<string, Database.Database>();
 
@@ -64,6 +65,9 @@ function migrate(db: Database.Database): void {
   `);
   const row = db.prepare('SELECT MAX(version) AS v FROM schema_migrations').get() as { v: number | null } | undefined;
   const v = row?.v ?? 0;
+  if (v < 4) {
+    log.db.info('migrating schema', { from: v, to: 4 });
+  }
   if (v < 1) {
     db.exec(LAYOUT_RUNS_V1);
     db.prepare('INSERT INTO schema_migrations (version) VALUES (1)').run();
@@ -125,7 +129,8 @@ export function getOrOpenProjectDb(projectId: string): Database.Database | null 
     migrate(db);
     dbCache.set(projectId, db);
     return db;
-  } catch {
+  } catch (err) {
+    log.db.error('failed to open project db', { projectId, err });
     return null;
   }
 }

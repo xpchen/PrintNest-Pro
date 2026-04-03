@@ -61,13 +61,17 @@ export type LeftTaskTab = 'project' | 'resources' | 'layoutTask' | 'qaOutput';
 /** 顶栏工作模式（模板/输出为壳层占位，后续接实页） */
 export type EditorWorkMode = 'resources' | 'template' | 'layout' | 'output';
 
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
 export interface UiShellSlice {
   leftDockCollapsed: boolean;
   rightDockCollapsed: boolean;
+  saveStatus: SaveStatus;
   toggleLeftDock: () => void;
   toggleRightDock: () => void;
   expandLeftDock: () => void;
   expandRightDock: () => void;
+  setSaveStatus: (status: SaveStatus) => void;
 }
 
 export interface CanvasViewSlice {

@@ -55,4 +55,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   openProjectFolder: (projectId: string) => ipcRenderer.invoke('shell:openProjectFolder', projectId),
+
+  // 日志
+  logError: (...args: unknown[]) => ipcRenderer.invoke('log:error', ...args),
+  logWarn: (...args: unknown[]) => ipcRenderer.invoke('log:warn', ...args),
 });

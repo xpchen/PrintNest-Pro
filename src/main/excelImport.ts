@@ -5,6 +5,7 @@ import readXlsxFile from 'read-excel-file/node';
 import * as fs from 'fs';
 import { ipcMain } from 'electron';
 import type { ExcelImportResult, ExcelImportRow } from '../shared/excelImport';
+import { log } from '../shared/logger';
 
 function cellToString(v: unknown): string {
   if (v === null || v === undefined) return '';
@@ -160,6 +161,7 @@ export async function parseExcelImportFile(filePath: string): Promise<ExcelImpor
     warnings.push('没有数据行');
   }
 
+  log.import.info('excel parsed', { rows: rows.length, warnings: warnings.length, filePath });
   return { rows, warnings };
 }
 

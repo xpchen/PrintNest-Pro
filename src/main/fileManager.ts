@@ -26,6 +26,7 @@ import type { ImportAssetResult } from '../shared/persistence/importAssetResult'
 import { getOrOpenProjectDb, closeProjectDb } from './db/projectDb';
 import { listRecentLayoutRuns } from './db/repositories/layoutRunRepository';
 import { summarizeLayoutConfigFingerprint } from '../shared/layoutConfigFingerprint';
+import { log } from '../shared/logger';
 
 export { getProjectDirectory, ensureProjectLayout } from './projectPaths';
 
@@ -142,7 +143,7 @@ function saveProject(projectId: string, data: object): void {
   ensureProjectLayout(projectId);
   const state = payloadToEditorState(projectId, data);
   if (!state.config) {
-    console.warn('[fileManager] skip save: missing config');
+    log.project.warn('skip save: missing config', { projectId });
     return;
   }
   saveEditorState(projectId, state, { jsonSnapshot: true });
@@ -200,7 +201,7 @@ function duplicateProject(srcId: string, destId: string): boolean {
     fs.cpSync(srcRoot, destRoot, { recursive: true });
     return true;
   } catch (e) {
-    console.error('[duplicateProject]', e);
+    log.project.error('duplicateProject failed', { srcId, destId, err: e });
     return false;
   }
 }

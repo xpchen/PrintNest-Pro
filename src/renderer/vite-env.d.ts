@@ -73,6 +73,8 @@ declare global {
     onLayoutProgress?: (cb: (p: { phase: string; pct: number }) => void) => () => void;
     onAppCommand?: (cb: (payload: { id: string; payload?: unknown }) => void) => () => void;
     openProjectFolder?: (projectId: string) => Promise<boolean>;
+    logError?: (...args: unknown[]) => Promise<void>;
+    logWarn?: (...args: unknown[]) => Promise<void>;
   }
 
   interface Window {

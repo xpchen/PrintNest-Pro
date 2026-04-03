@@ -9,6 +9,7 @@ import type { LayoutJobInvokeResult, LayoutProgressPayload } from '../shared/ipc
 import { executeLayoutJob } from '../shared/engine/layoutJob';
 import { tryRecordLayoutRun } from './db/layoutRunRecorder';
 import { getRunRestorePayload, listRecentLayoutRuns } from './db/repositories/layoutRunRepository';
+import { log } from '../shared/logger';
 
 export type LayoutRunPayload = {
   items: PrintItem[];
@@ -82,7 +83,8 @@ export function registerLayoutIpc(): void {
     let result: LayoutResult;
     try {
       result = await runLayoutInWorker(payload, contents);
-    } catch {
+    } catch (err) {
+      log.engine.warn('worker failed, fallback to main thread', err);
       result = executeLayoutJob({
         items: payload.items,
         config: payload.config,
@@ -95,6 +97,13 @@ export function registerLayoutIpc(): void {
       const id = tryRecordLayoutRun(payload.projectId, result, payload.config);
       if (id) layoutRunId = id;
     }
+
+    log.engine.info('layout done', {
+      canvases: result.canvases.length,
+      utilization: result.totalUtilization,
+      unplaced: result.unplaced?.length ?? 0,
+      elapsedMs: result.elapsedMs,
+    });
 
     sendProgress(contents, { phase: 'complete', pct: 100 });
     return { result, layoutRunId };

@@ -333,6 +333,7 @@ export const EditorChromeProvider: React.FC<{ children: React.ReactNode }> = ({ 
       showCropMarks: true,
       outputPath,
       projectId: currentProjectId,
+      edgeSafeMm: config.edgeSafeMm,
     });
 
     if (res.success) {

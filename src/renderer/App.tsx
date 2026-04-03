@@ -67,18 +67,25 @@ export const App: React.FC = () => {
     const api = window.electronAPI;
     if (!api?.autoSaveProject) return;
 
-    const flush = () => {
+    const flush = async () => {
       const s = useAppStore.getState();
       if (s.uiPhase === 'home') return;
       if (!s.config) return;
-      void api.autoSaveProject!(s.currentProjectId, {
-        projectName: s.projectName,
-        items: s.items,
-        config: s.config,
-        result: s.result,
-        layoutSourceSignature: s.layoutSourceSignature,
-        manualEdits: s.manualEdits,
-      });
+      useAppStore.getState().setSaveStatus('saving');
+      try {
+        await api.autoSaveProject!(s.currentProjectId, {
+          projectName: s.projectName,
+          items: s.items,
+          config: s.config,
+          result: s.result,
+          layoutSourceSignature: s.layoutSourceSignature,
+          manualEdits: s.manualEdits,
+        });
+        useAppStore.getState().setSaveStatus('saved');
+      } catch (err) {
+        useAppStore.getState().setSaveStatus('error');
+        window.electronAPI?.logError?.('auto-save failed', String(err));
+      }
     };
 
     const schedule = () => {

@@ -13,6 +13,7 @@ import * as path from 'path';
 import type { LayoutConfig } from '../shared/types';
 import { getOrOpenProjectDb } from './db/projectDb';
 import { getProjectDirectory } from './projectPaths';
+import { log } from '../shared/logger';
 
 // PDFKit 类型（动态 require 以兼容打包）
 let PDFDocument: any;
@@ -52,6 +53,8 @@ interface PdfExportOptions {
   outputPath: string;
   /** 提供时优先用受管素材路径导出（双语义之「当前编辑态」） */
   projectId?: string;
+  /** 安全边距 mm，>0 时在每页绘制安全边距虚线框 */
+  edgeSafeMm?: number;
 }
 
 /**
@@ -117,7 +120,7 @@ async function exportPdf(options: PdfExportOptions): Promise<void> {
     throw new Error('PDFKit 未安装。请运行: npm install pdfkit');
   }
 
-  const { canvasWidth, canvasHeight, canvases, bleed, showCropMarks, outputPath, projectId } = options;
+  const { canvasWidth, canvasHeight, canvases, bleed, showCropMarks, outputPath, projectId, edgeSafeMm } = options;
   const bleedPt = bleed * MM_TO_PT;
 
   // 页面尺寸 = 画布尺寸 + 四边出血
@@ -155,22 +158,42 @@ async function exportPdf(options: PdfExportOptions): Promise<void> {
 
       // 尝试嵌入图片
       let imageDrawn = false;
+
+      // 解析图片源
+      let imgSrc: string | Buffer | undefined;
       try {
         const managedPath =
           projectId && p.assetId ? resolveManagedAssetPath(projectId, p.assetId) : undefined;
         if (p.imagePath && fs.existsSync(p.imagePath)) {
-          doc.image(p.imagePath, px, py, { width: pw, height: ph });
-          imageDrawn = true;
+          imgSrc = p.imagePath;
         } else if (managedPath) {
-          doc.image(managedPath, px, py, { width: pw, height: ph });
-          imageDrawn = true;
+          imgSrc = managedPath;
         } else if (p.imageBase64) {
-          const buf = base64ToBuffer(p.imageBase64);
-          doc.image(buf, px, py, { width: pw, height: ph });
-          imageDrawn = true;
+          imgSrc = base64ToBuffer(p.imageBase64);
         }
-      } catch {
-        // 图片加载失败，用色块替代
+      } catch (err) {
+        log.export.warn('image load failed, using fallback', { name: p.name, err });
+      }
+
+      if (imgSrc) {
+        try {
+          if (p.rotated) {
+            // 旋转 90°：原始图片尺寸为 height x width（旋转前），
+            // 需要在 placement 的 bounding box (pw x ph) 中绘制旋转后的图片
+            doc.save();
+            // 移到 placement 中心，旋转 90°，再偏移绘制
+            doc.translate(px + pw / 2, py + ph / 2);
+            doc.rotate(90);
+            // 旋转后坐标系交换：绘制原图（宽=ph, 高=pw）
+            doc.image(imgSrc, -ph / 2, -pw / 2, { width: ph, height: pw });
+            doc.restore();
+          } else {
+            doc.image(imgSrc, px, py, { width: pw, height: ph });
+          }
+          imageDrawn = true;
+        } catch (err) {
+          log.export.warn('image draw failed, using fallback', { name: p.name, err });
+        }
       }
 
       if (!imageDrawn) {
@@ -187,6 +210,24 @@ async function exportPdf(options: PdfExportOptions): Promise<void> {
       drawCropMarks(doc, canvasWidth, canvasHeight, bleed);
     }
 
+    // 安全边距虚线框
+    const safeMm = edgeSafeMm ?? 0;
+    if (safeMm > 0 && safeMm * 2 < canvasWidth && safeMm * 2 < canvasHeight) {
+      const safePt = safeMm * MM_TO_PT;
+      doc.save();
+      doc.rect(
+        bleedPt + safePt,
+        bleedPt + safePt,
+        (canvasWidth - safeMm * 2) * MM_TO_PT,
+        (canvasHeight - safeMm * 2) * MM_TO_PT,
+      )
+        .dash(4, { space: 3 })
+        .strokeColor('#ff6600')
+        .lineWidth(0.5)
+        .stroke();
+      doc.restore();
+    }
+
     // 画布边界线（虚线）
     doc.save();
     doc.rect(bleedPt, bleedPt, canvasWidth * MM_TO_PT, canvasHeight * MM_TO_PT)
@@ -199,9 +240,15 @@ async function exportPdf(options: PdfExportOptions): Promise<void> {
 
   doc.end();
 
-  return new Promise((resolve, reject) => {
-    stream.on('finish', resolve);
-    stream.on('error', reject);
+  return new Promise<void>((resolve, reject) => {
+    stream.on('finish', () => {
+      log.export.info('pdf exported', { pages: canvases.length, path: outputPath });
+      resolve();
+    });
+    stream.on('error', (err) => {
+      log.export.error('pdf export stream error', err);
+      reject(err);
+    });
   });
 }
 
@@ -276,6 +323,7 @@ async function exportPdfFromHistoricalRun(payload: HistoricalPdfPayload): Promis
     showCropMarks: true,
     outputPath: payload.outputPath,
     projectId: payload.projectId,
+    edgeSafeMm: config.edgeSafeMm,
   });
 }
 

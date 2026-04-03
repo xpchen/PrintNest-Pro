@@ -12,11 +12,13 @@ function migrateLeftTaskTab(raw: unknown): LeftTaskTab | undefined {
 export const createUiShellSlice: StateCreator<AppState, [], [], UiShellSlice> = (set) => ({
   leftDockCollapsed: false,
   rightDockCollapsed: false,
+  saveStatus: 'idle' as const,
 
   toggleLeftDock: () => set((s) => ({ leftDockCollapsed: !s.leftDockCollapsed })),
   toggleRightDock: () => set((s) => ({ rightDockCollapsed: !s.rightDockCollapsed })),
   expandLeftDock: () => set({ leftDockCollapsed: false }),
   expandRightDock: () => set({ rightDockCollapsed: false }),
+  setSaveStatus: (status) => set({ saveStatus: status }),
 });
 
 export function loadUiShellFromStorage(

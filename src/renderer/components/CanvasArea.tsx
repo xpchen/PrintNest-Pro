@@ -572,6 +572,16 @@ export const CanvasArea: React.FC = () => {
         e.preventDefault();
         deleteSelected();
       }
+      // Undo: Cmd+Z / Ctrl+Z
+      if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        e.preventDefault();
+        useAppStore.temporal.getState().undo();
+      }
+      // Redo: Cmd+Shift+Z / Ctrl+Shift+Z
+      if (e.key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        useAppStore.temporal.getState().redo();
+      }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);

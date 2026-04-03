@@ -15,6 +15,7 @@ export const StatusBar: React.FC = () => {
     canvasPointerMm,
     editorWorkMode,
     displayUnit,
+    saveStatus,
   } = useAppStore();
 
   const utilization = result?.totalUtilization ?? 0;
@@ -83,6 +84,27 @@ export const StatusBar: React.FC = () => {
           </button>
         </div>
       )}
+      <div
+        className="statusbar-item"
+        style={{
+          color:
+            saveStatus === 'error'
+              ? 'var(--danger)'
+              : saveStatus === 'saving'
+                ? 'var(--text-secondary)'
+                : saveStatus === 'saved'
+                  ? 'var(--success)'
+                  : undefined,
+        }}
+      >
+        {saveStatus === 'saving'
+          ? '保存中...'
+          : saveStatus === 'saved'
+            ? '已保存'
+            : saveStatus === 'error'
+              ? '保存失败'
+              : ''}
+      </div>
       <div className="statusbar-item">PrintNest Pro v2</div>
     </div>
   );
