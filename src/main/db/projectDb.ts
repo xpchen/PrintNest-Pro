@@ -194,6 +194,12 @@ CREATE TABLE IF NOT EXISTS export_history (
 `);
     db.prepare('INSERT INTO schema_migrations (version) VALUES (6)').run();
   }
+
+  // ── v7: artwork_items 增加 metadata_json ──
+  if (v < 7) {
+    db.exec(`ALTER TABLE artwork_items ADD COLUMN metadata_json TEXT`);
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (7)').run();
+  }
 }
 
 /**

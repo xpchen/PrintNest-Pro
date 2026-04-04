@@ -247,7 +247,7 @@ export function loadEditorState(projectId: string): SerializedEditorState | null
 
   const artRows = db
     .prepare(
-      `SELECT id, asset_id, name, width_mm, height_mm, quantity, spacing, bleed, priority, allow_rotation, group_code, color, sort_order
+      `SELECT id, asset_id, name, width_mm, height_mm, quantity, spacing, bleed, priority, allow_rotation, group_code, color, sort_order, metadata_json
        FROM artwork_items ORDER BY sort_order ASC, id ASC`,
     )
     .all() as Array<{
@@ -264,23 +264,31 @@ export function loadEditorState(projectId: string): SerializedEditorState | null
     group_code: string | null;
     color: string | null;
     sort_order: number;
+    metadata_json: string | null;
   }>;
 
-  const items: SerializedEditorState['items'] = artRows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    width: r.width_mm,
-    height: r.height_mm,
-    quantity: r.quantity,
-    spacing: r.spacing,
-    bleed: r.bleed,
-    priority: r.priority,
-    allowRotation: Boolean(r.allow_rotation),
-    group: r.group_code ?? undefined,
-    color: r.color ?? '#888',
-    imageSrc: '',
-    assetId: r.asset_id ?? undefined,
-  }));
+  const items: SerializedEditorState['items'] = artRows.map((r) => {
+    let metadata: Record<string, unknown> | undefined;
+    if (r.metadata_json) {
+      try { metadata = JSON.parse(r.metadata_json); } catch { /* ignore */ }
+    }
+    return {
+      id: r.id,
+      name: r.name,
+      width: r.width_mm,
+      height: r.height_mm,
+      quantity: r.quantity,
+      spacing: r.spacing,
+      bleed: r.bleed,
+      priority: r.priority,
+      allowRotation: Boolean(r.allow_rotation),
+      group: r.group_code ?? undefined,
+      color: r.color ?? '#888',
+      imageSrc: '',
+      assetId: r.asset_id ?? undefined,
+      metadata: metadata as SerializedEditorState['items'][number]['metadata'],
+    };
+  });
 
   let manualEdits: SerializedEditorState['manualEdits'];
   if (row.manual_edits_json) {
@@ -354,8 +362,8 @@ export function saveEditorState(
     db.prepare('DELETE FROM artwork_items').run();
     const ins = db.prepare(
       `INSERT INTO artwork_items (
-        id, asset_id, name, width_mm, height_mm, quantity, spacing, bleed, priority, allow_rotation, group_code, color, sort_order
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, asset_id, name, width_mm, height_mm, quantity, spacing, bleed, priority, allow_rotation, group_code, color, sort_order, metadata_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     state.items.forEach((it, idx) => {
       ins.run(
@@ -372,6 +380,7 @@ export function saveEditorState(
         it.group ?? null,
         it.color,
         idx,
+        it.metadata ? JSON.stringify(it.metadata) : null,
       );
     });
 
