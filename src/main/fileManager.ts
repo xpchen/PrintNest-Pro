@@ -275,6 +275,66 @@ function duplicateProject(srcId: string, destId: string): boolean {
   }
 }
 
+/* ================================================================== */
+/*  资产查询                                                           */
+/* ================================================================== */
+
+export interface AssetRecord {
+  id: string;
+  managedRelativePath: string;
+  pixelWidth: number | null;
+  pixelHeight: number | null;
+}
+
+/**
+ * 查询项目所有资产记录（轻量，不读文件内容）。
+ */
+export function listProjectAssets(projectId: string): AssetRecord[] {
+  const db = getOrOpenProjectDb(projectId);
+  const rows = db
+    .prepare('SELECT id, managed_relative_path, pixel_width, pixel_height FROM assets')
+    .all() as { id: string; managed_relative_path: string; pixel_width: number | null; pixel_height: number | null }[];
+  return rows.map((r) => ({
+    id: r.id,
+    managedRelativePath: r.managed_relative_path,
+    pixelWidth: r.pixel_width,
+    pixelHeight: r.pixel_height,
+  }));
+}
+
+/**
+ * 读取单个资产的缩略图为 base64 data URL。
+ * 优先返回 _thumb.png，不存在则降级到原图（受大小限制保护）。
+ */
+export function readAssetThumbnailBase64(projectId: string, assetId: string): string | null {
+  const db = getOrOpenProjectDb(projectId);
+  const row = db
+    .prepare('SELECT managed_relative_path FROM assets WHERE id = ?')
+    .get(assetId) as { managed_relative_path: string } | undefined;
+  if (!row) return null;
+
+  const root = getProjectDir(projectId);
+  const relPath = row.managed_relative_path;
+  const ext = path.extname(relPath);
+  const base = relPath.slice(0, -ext.length);
+  const thumbPath = path.join(root, `${base}_thumb.png`);
+  const fullPath = path.join(root, relPath);
+
+  // 优先缩略图
+  const target = fs.existsSync(thumbPath) ? thumbPath : fs.existsSync(fullPath) ? fullPath : null;
+  if (!target) return null;
+
+  const stats = fs.statSync(target);
+  if (stats.size > MAX_FILE_BYTES) {
+    log.import.warn('readAssetThumbnailBase64: file too large', { target, sizeMB: (stats.size / 1024 / 1024).toFixed(1) });
+    return null;
+  }
+
+  const mime = target.endsWith('.png') ? 'image/png' : 'image/jpeg';
+  const data = fs.readFileSync(target);
+  return `data:${mime};base64,${data.toString('base64')}`;
+}
+
 /** 注册 IPC handlers */
 export function registerFileManagerIPC(): void {
   // 导入素材文件（复制到项目目录）
@@ -320,6 +380,16 @@ export function registerFileManagerIPC(): void {
 
   ipcMain.handle('file:duplicateProject', async (_event, srcId: string, destId: string) => {
     return duplicateProject(srcId, destId);
+  });
+
+  // 查询项目资产列表（轻量元数据）
+  ipcMain.handle('file:listProjectAssets', async (_event, projectId: string) => {
+    return listProjectAssets(projectId);
+  });
+
+  // 读取资产缩略图为 base64
+  ipcMain.handle('file:readAssetThumbnailBase64', async (_event, projectId: string, assetId: string) => {
+    return readAssetThumbnailBase64(projectId, assetId);
   });
 
   // 读取文件为 base64（用于渲染器显示本地图片）

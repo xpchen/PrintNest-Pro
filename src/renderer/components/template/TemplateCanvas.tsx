@@ -6,6 +6,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { TemplateElement } from '../../../shared/types';
 import { resolveTemplateDrawables } from '../../../shared/template/resolveDrawables';
 import type { ResolvedDrawable } from '../../../shared/types/template-render';
+import { useAssetMap } from '../../hooks/useAssetMap';
 
 const CANVAS_PADDING = 20;
 const PX_PER_MM = 3;
@@ -160,6 +161,7 @@ function DrawableRenderer({ d, px }: { d: ResolvedDrawable; px: number }) {
 export const TemplateCanvas: React.FC = () => {
   const currentTemplateId = useAppStore((s) => s.currentTemplateId);
   const templates = useAppStore((s) => s.templates);
+  const assetMap = useAssetMap();
   const selectedElementIds = useAppStore((s) => s.selectedElementIds);
   const selectElements = useAppStore((s) => s.selectElements);
   const addElement = useAppStore((s) => s.addElement);
@@ -184,7 +186,7 @@ export const TemplateCanvas: React.FC = () => {
     return resolveTemplateDrawables({
       template: tpl,
       record: previewRecord,
-      assetMap: new Map(), // TODO: 接入资产管线后填充
+      assetMap,
       previewContext: { mode: previewRecord ? 'preview' : 'design' },
     });
   }, [tpl, previewRecord]);

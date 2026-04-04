@@ -9,7 +9,6 @@ function makeInstance(id: string, recordId: string): TemplateInstance {
     recordId,
     resolvedWidthMm: 100,
     resolvedHeightMm: 60,
-    renderPayload: {},
     status: 'valid',
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',

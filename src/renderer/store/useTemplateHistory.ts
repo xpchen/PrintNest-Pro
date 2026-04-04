@@ -1,7 +1,8 @@
 /**
  * 模板域独立 Undo/Redo 历史
  *
- * 只跟踪模板编辑原语：templates, currentTemplateId, selectedElementIds。
+ * 跟踪模板编辑原语：templates, currentTemplateId。
+ * selectedElementIds 包含在快照中用于恢复选区，但纯选区变化不触发入历史。
  * 不跟踪 dataRecords / templateInstances / preview cache / layout result。
  *
  * 与排版域 temporal (useAppStore.temporal) 互不干扰。
@@ -100,8 +101,9 @@ export const useTemplateHistory = create<TemplateHistoryState>((set, get) => ({
 
 /**
  * 初始化模板历史订阅。
- * 在 App 启动时调用一次。监听 templates/currentTemplateId/selectedElementIds 变化，
+ * 在 App 启动时调用一次。监听 templates / currentTemplateId 变化，
  * 每次变化时将变化前的快照推入历史栈。
+ * 注意：纯 selectedElementIds 变化不触发入历史（选区不是编辑操作）。
  */
 let _unsubscribe: (() => void) | null = null;
 

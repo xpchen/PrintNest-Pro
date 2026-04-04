@@ -38,13 +38,14 @@ describe('instantiateTemplate', () => {
     expect(instances[1].id).toBe('inst_tpl_1_r2');
   });
 
-  it('resolves fixedText elements', () => {
+  it('lightweight instances have no resolvedElements or renderPayload', () => {
     const tpl = makeTemplate([
       { id: 'e1', type: 'fixedText', xMm: 0, yMm: 0, widthMm: 50, heightMm: 10, zIndex: 0, fixedValue: 'Hello', style: { fontSizePt: 12 } },
     ]);
     const { instances } = instantiateTemplate(tpl, [makeRecord('r1', {})]);
-    expect(instances[0].resolvedElements![0].resolvedText).toBe('Hello');
     expect(instances[0].status).toBe('valid');
+    expect('resolvedElements' in instances[0]).toBe(false);
+    expect('renderPayload' in instances[0]).toBe(false);
   });
 
   it('reports missing_field for variableText without value', () => {
@@ -57,23 +58,22 @@ describe('instantiateTemplate', () => {
     expect(instances[0].validationErrors![0].code).toBe('missing_field');
   });
 
-  it('resolves variableText with matching field', () => {
+  it('valid when variableText field exists', () => {
     const tpl = makeTemplate([
       { id: 'e1', type: 'variableText', xMm: 0, yMm: 0, widthMm: 50, heightMm: 10, zIndex: 0, binding: { mode: 'field', fieldKey: 'name' }, style: { fontSizePt: 12 } },
     ]);
     const { instances, totalErrors } = instantiateTemplate(tpl, [makeRecord('r1', { name: 'Alice' })]);
     expect(totalErrors).toBe(0);
-    expect(instances[0].resolvedElements![0].resolvedText).toBe('Alice');
     expect(instances[0].status).toBe('valid');
   });
 
-  it('uses fallbackValue when field missing', () => {
+  it('valid when fallbackValue provided for missing field', () => {
     const tpl = makeTemplate([
       { id: 'e1', type: 'variableText', xMm: 0, yMm: 0, widthMm: 50, heightMm: 10, zIndex: 0, binding: { mode: 'field', fieldKey: 'name', fallbackValue: 'N/A' }, style: { fontSizePt: 12 } },
     ]);
     const { instances, totalErrors } = instantiateTemplate(tpl, [makeRecord('r1', {})]);
     expect(totalErrors).toBe(0);
-    expect(instances[0].resolvedElements![0].resolvedText).toBe('N/A');
+    expect(instances[0].status).toBe('valid');
   });
 
   it('reports invalid_barcode for EAN-13 with wrong format', () => {
@@ -90,5 +90,41 @@ describe('instantiateTemplate', () => {
     const tpl = makeTemplate();
     const { instances } = instantiateTemplate(tpl, []);
     expect(instances.length).toBe(0);
+  });
+
+  it('preserves template dimensions in instance', () => {
+    const tpl = makeTemplate();
+    tpl.widthMm = 200;
+    tpl.heightMm = 150;
+    const { instances } = instantiateTemplate(tpl, [makeRecord('r1', {})]);
+    expect(instances[0].resolvedWidthMm).toBe(200);
+    expect(instances[0].resolvedHeightMm).toBe(150);
+  });
+
+  it('generates snapshotHash', () => {
+    const tpl = makeTemplate([
+      { id: 'e1', type: 'fixedText', xMm: 0, yMm: 0, widthMm: 50, heightMm: 10, zIndex: 0, fixedValue: 'A', style: { fontSizePt: 12 } },
+    ]);
+    const { instances } = instantiateTemplate(tpl, [makeRecord('r1', { name: 'Alice' })]);
+    expect(instances[0].snapshotHash).toBeDefined();
+    expect(typeof instances[0].snapshotHash).toBe('string');
+    expect(instances[0].snapshotHash!.length).toBeGreaterThan(0);
+  });
+
+  it('snapshotHash changes with different record data', () => {
+    const tpl = makeTemplate([
+      { id: 'e1', type: 'fixedText', xMm: 0, yMm: 0, widthMm: 50, heightMm: 10, zIndex: 0, fixedValue: 'A', style: { fontSizePt: 12 } },
+    ]);
+    const { instances: i1 } = instantiateTemplate(tpl, [makeRecord('r1', { name: 'Alice' })]);
+    const { instances: i2 } = instantiateTemplate(tpl, [makeRecord('r1', { name: 'Bob' })]);
+    expect(i1[0].snapshotHash).not.toBe(i2[0].snapshotHash);
+  });
+
+  it('snapshotHash stable for same input', () => {
+    const tpl = makeTemplate();
+    const rec = makeRecord('r1', { x: '1' });
+    const { instances: i1 } = instantiateTemplate(tpl, [rec]);
+    const { instances: i2 } = instantiateTemplate(tpl, [rec]);
+    expect(i1[0].snapshotHash).toBe(i2[0].snapshotHash);
   });
 });

@@ -214,25 +214,13 @@ export interface TemplateInstanceIssue {
   recordId?: string;
 }
 
-/** 已解析的元素值（实例渲染用） */
-export interface ResolvedTemplateElement {
-  id: string;
-  type: TemplateElementType;
-  xMm: number;
-  yMm: number;
-  widthMm: number;
-  heightMm: number;
-  resolvedText?: string;
-  /** fixedImage → assetId; variableImage → 运行时从 record 解析的资产 id 或路径 */
-  resolvedImageAssetId?: string;
-  resolvedBarcodeValue?: string;
-}
-
 export type TemplateInstanceStatus = 'valid' | 'warning' | 'error';
 
 /**
- * 模板实例：一条 DataRecord 与一个 TemplateDefinition 的绑定结果。
- * 未来会生成 PrintItem 参与排版。
+ * 模板实例：一条 DataRecord 与一个 TemplateDefinition 的轻量绑定索引。
+ *
+ * 不存储解析后的元素或渲染数据 — 需要预览/排版/导出时，
+ * 统一通过 resolveTemplateDrawables(template, record, assetMap) 现算。
  */
 export interface TemplateInstance {
   id: string;
@@ -241,10 +229,6 @@ export interface TemplateInstance {
   /** 实例化后的实际尺寸 (mm) */
   resolvedWidthMm: number;
   resolvedHeightMm: number;
-  /** 渲染所需的完整数据 */
-  renderPayload: Record<string, unknown>;
-  /** 已解析的元素列表 */
-  resolvedElements?: ResolvedTemplateElement[];
   /** 实例状态 */
   status: TemplateInstanceStatus;
   /** 校验问题 */

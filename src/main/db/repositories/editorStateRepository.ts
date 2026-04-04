@@ -126,10 +126,8 @@ function loadTemplateInstances(db: Database): TemplateInstance[] {
     record_id: string;
     resolved_width_mm: number;
     resolved_height_mm: number;
-    render_payload_json: string;
     status: string;
     validation_errors_json: string | null;
-    resolved_elements_json: string | null;
     snapshot_hash: string | null;
     created_at: string;
     updated_at: string;
@@ -140,10 +138,8 @@ function loadTemplateInstances(db: Database): TemplateInstance[] {
     recordId: r.record_id,
     resolvedWidthMm: r.resolved_width_mm,
     resolvedHeightMm: r.resolved_height_mm,
-    renderPayload: JSON.parse(r.render_payload_json),
     status: r.status as TemplateInstance['status'],
     validationErrors: r.validation_errors_json ? JSON.parse(r.validation_errors_json) : undefined,
-    resolvedElements: r.resolved_elements_json ? JSON.parse(r.resolved_elements_json) : undefined,
     snapshotHash: r.snapshot_hash ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -209,10 +205,10 @@ function saveTemplateInstances(db: Database, instances: TemplateInstance[]): voi
       i.recordId,
       i.resolvedWidthMm,
       i.resolvedHeightMm,
-      JSON.stringify(i.renderPayload),
+      '{}', // 轻量实例不再存渲染数据，保持 DB schema 兼容
       i.status,
       i.validationErrors ? JSON.stringify(i.validationErrors) : null,
-      i.resolvedElements ? JSON.stringify(i.resolvedElements) : null,
+      null, // resolvedElements 已移除
       i.snapshotHash ?? null,
       i.createdAt,
       i.updatedAt,

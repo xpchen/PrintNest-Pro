@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('file:deleteProject', projectId),
   readAsBase64: (filePath: string) =>
     ipcRenderer.invoke('file:readAsBase64', filePath),
+  listProjectAssets: (projectId: string) =>
+    ipcRenderer.invoke('file:listProjectAssets', projectId),
+  readAssetThumbnailBase64: (projectId: string, assetId: string) =>
+    ipcRenderer.invoke('file:readAssetThumbnailBase64', projectId, assetId),
   parseExcelImport: (filePath: string) =>
     ipcRenderer.invoke('file:parseExcelImport', filePath),
   readExcelSheets: (filePath: string) =>

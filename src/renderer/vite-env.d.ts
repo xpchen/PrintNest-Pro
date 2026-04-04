@@ -38,6 +38,10 @@ declare global {
     >;
     deleteProject: (projectId: string) => Promise<boolean>;
     readAsBase64: (filePath: string) => Promise<string | null>;
+    listProjectAssets?: (projectId: string) => Promise<
+      Array<{ id: string; managedRelativePath: string; pixelWidth: number | null; pixelHeight: number | null }>
+    >;
+    readAssetThumbnailBase64?: (projectId: string, assetId: string) => Promise<string | null>;
     parseExcelImport: (filePath: string) => Promise<ExcelImportResult>;
     readExcelSheets?: (filePath: string) => Promise<unknown[]>;
     mapTableToImportRows?: (table: object, config: object) => Promise<{ rows: unknown[]; warnings: string[] }>;

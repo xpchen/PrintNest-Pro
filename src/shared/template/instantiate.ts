@@ -1,8 +1,10 @@
 /**
- * 模板实例化引擎
+ * 模板实例化引擎 — v0.5 轻量版
  *
  * TemplateDefinition + DataRecord[] → TemplateInstance[]
- * 每条 DataRecord × 模板 → 1 个 TemplateInstance。
+ *
+ * 只做校验 + 生成轻量索引。不再生成 resolvedElements 或 renderPayload。
+ * 需要预览/排版/导出时，统一通过 resolveTemplateDrawables() 现算。
  */
 import type {
   TemplateDefinition,
@@ -10,7 +12,6 @@ import type {
   TemplateInstance,
   TemplateInstanceIssue,
   TemplateElement,
-  ResolvedTemplateElement,
   TemplateInstanceStatus,
 } from '../types/template';
 
@@ -18,79 +19,71 @@ function issueId(): string {
   return `iss_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-function resolveElement(
+/**
+ * 生成实例快照哈希：模板版本 + 模板元素摘要 + 记录字段摘要。
+ * 用于增量失效判断 — hash 不同说明需要重新计算。
+ */
+function computeSnapshotHash(template: TemplateDefinition, record: DataRecord): string {
+  // 轻量摘要：模板版本 + 元素 id/type 列表 + 记录字段排序 JSON
+  const tplDigest = `v${template.version}:${template.widthMm}x${template.heightMm}:${template.elements.map((e) => `${e.id}:${e.type}`).join(',')}`;
+  const fieldKeys = Object.keys(record.fields).sort();
+  const fieldDigest = fieldKeys.map((k) => `${k}=${record.fields[k] ?? ''}`).join('|');
+  // 简单 hash（djb2 变体）
+  const raw = `${tplDigest}||${fieldDigest}`;
+  let hash = 5381;
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) + hash + raw.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
+/**
+ * 校验单个元素在给定记录下是否有数据问题。
+ * 只生成 issues，不解析内容（内容解析由 resolveTemplateDrawables 负责）。
+ */
+function validateElement(
   el: TemplateElement,
   record: DataRecord,
   issues: TemplateInstanceIssue[],
-): ResolvedTemplateElement {
-  const base: ResolvedTemplateElement = {
-    id: el.id,
-    type: el.type,
-    xMm: el.xMm,
-    yMm: el.yMm,
-    widthMm: el.widthMm,
-    heightMm: el.heightMm,
-  };
-
+): void {
   switch (el.type) {
     case 'fixedText':
-      base.resolvedText = el.fixedValue;
+    case 'fixedImage':
+    case 'mark':
+      // 固定内容元素无需校验字段
       break;
 
     case 'variableText': {
       const key = el.binding.fieldKey;
-      if (!key) {
-        base.resolvedText = el.binding.fallbackValue ?? '';
-      } else {
+      if (key) {
         const val = record.fields[key];
-        if (val === undefined || val === '') {
-          if (el.binding.fallbackValue !== undefined) {
-            base.resolvedText = el.binding.fallbackValue;
-          } else {
-            base.resolvedText = '';
-            issues.push({
-              id: issueId(),
-              level: 'error',
-              code: 'missing_field',
-              message: `字段 "${key}" 缺失`,
-              elementId: el.id,
-              recordId: record.id,
-            });
-          }
-        } else {
-          base.resolvedText = val;
+        if ((val === undefined || val === '') && el.binding.fallbackValue === undefined) {
+          issues.push({
+            id: issueId(),
+            level: 'error',
+            code: 'missing_field',
+            message: `字段 "${key}" 缺失`,
+            elementId: el.id,
+            recordId: record.id,
+          });
         }
       }
       break;
     }
 
-    case 'fixedImage':
-      base.resolvedImageAssetId = el.assetId;
-      break;
-
     case 'variableImage': {
       const key = el.binding.fieldKey;
-      if (!key) {
-        base.resolvedImageAssetId = el.fallbackAssetId ?? '';
-      } else {
+      if (key) {
         const val = record.fields[key];
-        if (val === undefined || val === '') {
-          if (el.fallbackAssetId) {
-            base.resolvedImageAssetId = el.fallbackAssetId;
-          } else {
-            base.resolvedImageAssetId = '';
-            issues.push({
-              id: issueId(),
-              level: 'error',
-              code: 'missing_field',
-              message: `图片字段 "${key}" 缺失`,
-              elementId: el.id,
-              recordId: record.id,
-            });
-          }
-        } else {
-          // variableImage 绑定值可能是资产 id 或外部路径
-          base.resolvedImageAssetId = val;
+        if ((val === undefined || val === '') && !el.fallbackAssetId) {
+          issues.push({
+            id: issueId(),
+            level: 'error',
+            code: 'missing_field',
+            message: `图片字段 "${key}" 缺失`,
+            elementId: el.id,
+            recordId: record.id,
+          });
         }
       }
       break;
@@ -98,12 +91,9 @@ function resolveElement(
 
     case 'barcode': {
       const key = el.binding.fieldKey;
-      if (!key) {
-        base.resolvedBarcodeValue = el.binding.fallbackValue ?? '';
-      } else {
+      if (key) {
         const val = record.fields[key];
         if (val === undefined || val === '') {
-          base.resolvedBarcodeValue = '';
           issues.push({
             id: issueId(),
             level: 'error',
@@ -112,19 +102,15 @@ function resolveElement(
             elementId: el.id,
             recordId: record.id,
           });
-        } else {
-          // 基础格式校验
-          if (el.barcodeStyle.format === 'ean13' && !/^\d{13}$/.test(val)) {
-            issues.push({
-              id: issueId(),
-              level: 'warning',
-              code: 'invalid_barcode',
-              message: `EAN-13 需要 13 位数字，当前值: "${val}"`,
-              elementId: el.id,
-              recordId: record.id,
-            });
-          }
-          base.resolvedBarcodeValue = val;
+        } else if (el.barcodeStyle.format === 'ean13' && !/^\d{13}$/.test(val)) {
+          issues.push({
+            id: issueId(),
+            level: 'warning',
+            code: 'invalid_barcode',
+            message: `EAN-13 需要 13 位数字，当前值: "${val}"`,
+            elementId: el.id,
+            recordId: record.id,
+          });
         }
       }
       break;
@@ -132,12 +118,9 @@ function resolveElement(
 
     case 'qrcode': {
       const key = el.binding.fieldKey;
-      if (!key) {
-        base.resolvedBarcodeValue = el.binding.fallbackValue ?? '';
-      } else {
+      if (key) {
         const val = record.fields[key];
         if (val === undefined || val === '') {
-          base.resolvedBarcodeValue = '';
           issues.push({
             id: issueId(),
             level: 'error',
@@ -146,19 +129,11 @@ function resolveElement(
             elementId: el.id,
             recordId: record.id,
           });
-        } else {
-          base.resolvedBarcodeValue = val;
         }
       }
       break;
     }
-
-    case 'mark':
-      // marks 不需要数据绑定
-      break;
   }
-
-  return base;
 }
 
 export interface InstantiationResult {
@@ -168,7 +143,8 @@ export interface InstantiationResult {
 }
 
 /**
- * 实例化模板：每条 DataRecord 生成一个 TemplateInstance。
+ * 实例化模板：每条 DataRecord 生成一个轻量 TemplateInstance。
+ * 只做校验，不解析内容。
  */
 export function instantiateTemplate(
   template: TemplateDefinition,
@@ -180,10 +156,9 @@ export function instantiateTemplate(
 
   for (const record of records) {
     const issues: TemplateInstanceIssue[] = [];
-    const resolvedElements: ResolvedTemplateElement[] = [];
 
     for (const el of template.elements) {
-      resolvedElements.push(resolveElement(el, record, issues));
+      validateElement(el, record, issues);
     }
 
     const errors = issues.filter((i) => i.level === 'error').length;
@@ -202,13 +177,9 @@ export function instantiateTemplate(
       recordId: record.id,
       resolvedWidthMm: template.widthMm,
       resolvedHeightMm: template.heightMm,
-      renderPayload: {
-        templateName: template.name,
-        recordFields: record.fields,
-      },
-      resolvedElements,
       status,
       validationErrors: issues.length > 0 ? issues : undefined,
+      snapshotHash: computeSnapshotHash(template, record),
       createdAt: now,
       updatedAt: now,
     });

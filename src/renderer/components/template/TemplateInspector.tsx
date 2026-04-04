@@ -3,6 +3,7 @@
  */
 import React, { useCallback, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { AssetPicker } from './AssetPicker';
 import type {
   TemplateElement,
   FixedTextElement,
@@ -320,21 +321,16 @@ export const TemplateInspector: React.FC = () => {
             );
           })()}
 
-          {/* ── fixedImage: assetId + fitMode ── */}
+          {/* ── fixedImage: assetId 选择器 + fitMode ── */}
           {selectedElement.type === 'fixedImage' && (() => {
             const el = selectedElement as FixedImageElement;
             return (
               <>
-                <label className="tpl-inspector__field">
-                  <span className="tpl-inspector__label">资产 ID</span>
-                  <input
-                    type="text"
-                    className="tpl-inspector__input"
-                    value={el.assetId}
-                    readOnly
-                    placeholder="未选择图片"
-                  />
-                </label>
+                <AssetPicker
+                  label="图片资产"
+                  value={el.assetId}
+                  onChange={(assetId) => handleUpdateElement({ assetId } as Partial<TemplateElement>)}
+                />
                 <label className="tpl-inspector__field">
                   <span className="tpl-inspector__label">填充模式</span>
                   <select
@@ -347,9 +343,6 @@ export const TemplateInspector: React.FC = () => {
                     <option value="fill">拉伸 (fill)</option>
                   </select>
                 </label>
-                {!el.assetId && (
-                  <span className="tpl-inspector__hint">在 0-E+ 中实现图片选择器</span>
-                )}
               </>
             );
           })()}
@@ -393,9 +386,11 @@ export const TemplateInspector: React.FC = () => {
                     <option value="fill">拉伸 (fill)</option>
                   </select>
                 </label>
-                {!el.fallbackAssetId && (
-                  <span className="tpl-inspector__hint">未设置回退图片</span>
-                )}
+                <AssetPicker
+                  label="回退图片"
+                  value={el.fallbackAssetId || ''}
+                  onChange={(assetId) => handleUpdateElement({ fallbackAssetId: assetId || undefined } as Partial<TemplateElement>)}
+                />
               </>
             );
           })()}
