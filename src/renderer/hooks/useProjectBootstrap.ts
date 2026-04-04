@@ -18,8 +18,9 @@ import { log } from '../../shared/logger';
 /**
  * 为缺失 imageSrc 的模板排版项恢复预览图
  * 优先从磁盘缓存读取 PNG，缓存未命中时再重新渲染
+ * @param signal 可选 AbortSignal，组件卸载或项目切换时中止
  */
-async function rehydrateTemplatePreviews(): Promise<void> {
+async function rehydrateTemplatePreviews(signal?: AbortSignal): Promise<void> {
   const s = useAppStore.getState();
   // 只处理有 metadata（来自模板实例）但没有 imageSrc 的 items
   const needsPreview = s.items.filter((item) => item.metadata?.sourceInstanceId && !item.imageSrc);
@@ -39,8 +40,10 @@ async function rehydrateTemplatePreviews(): Promise<void> {
     if (api?.loadPreviewSnapshots && s.currentProjectId) {
       const LOAD_BATCH = 200;
       for (let i = 0; i < instanceIds.length; i += LOAD_BATCH) {
+        if (signal?.aborted) return;
         const chunk = instanceIds.slice(i, i + LOAD_BATCH);
         const cached: Record<string, string> = await api.loadPreviewSnapshots(s.currentProjectId, chunk);
+        if (signal?.aborted) return;
         const hitIds = Object.keys(cached);
         if (hitIds.length > 0) {
           diskHits += hitIds.length;
@@ -102,12 +105,15 @@ async function rehydrateTemplatePreviews(): Promise<void> {
       return;
     }
 
-    const assetMap = await fetchAssetMap(currentState.currentProjectId);
+    if (signal?.aborted) return;
+    const assetMap = await fetchAssetMap(currentState.currentProjectId, signal);
+    if (signal?.aborted) return;
 
     // 分批渲染
     const BATCH = 50;
     const allBase64: { id: string; base64: string }[] = [];
     for (let i = 0; i < preRenderInputs.length; i += BATCH) {
+      if (signal?.aborted) return;
       const chunk = preRenderInputs.slice(i, i + BATCH);
       const { blobUrls, base64Map } = await batchPreRenderInstances(chunk, assetMap);
 
@@ -161,25 +167,25 @@ export function useProjectBootstrap(): void {
       useAppStore.getState().setUiPhase('editor');
       return;
     }
-    let cancelled = false;
+    const abortController = new AbortController();
     void (async () => {
       const list = await api.listProjects();
       const last = readLastProjectId();
       if (last && list.includes(last)) {
         const raw = await api.loadProject(last);
-        if (cancelled) return;
+        if (abortController.signal.aborted) return;
         if (raw) {
           useAppStore.getState().setCurrentProjectId(last);
           useAppStore.getState().hydrateFromEditorState(raw as SerializedEditorState);
-          // 后台恢复模板预览图（优先磁盘缓存）
-          void rehydrateTemplatePreviews();
+          // 后台恢复模板预览图（优先磁盘缓存，传递 abort signal）
+          void rehydrateTemplatePreviews(abortController.signal);
           return;
         }
       }
-      if (!cancelled) useAppStore.getState().setUiPhase('home');
+      if (!abortController.signal.aborted) useAppStore.getState().setUiPhase('home');
     })();
     return () => {
-      cancelled = true;
+      abortController.abort();
     };
   }, []);
 

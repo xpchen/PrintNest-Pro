@@ -75,18 +75,27 @@ export function useAssetMap(): Map<string, AssetEntry> {
 /**
  * 命令式版本：不用 hook，直接异步获取 assetMap。
  * 适合在非组件上下文中使用。
+ * @param signal 可选 AbortSignal，项目切换时可中止加载
  */
-export async function fetchAssetMap(projectId: string): Promise<Map<string, AssetEntry>> {
+export async function fetchAssetMap(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<Map<string, AssetEntry>> {
   const api = window.electronAPI;
   if (!api?.listProjectAssets) return new Map();
+  if (signal?.aborted) return new Map();
 
   const records: AssetRecord[] = await api.listProjectAssets(projectId);
   const map = new Map<string, AssetEntry>();
 
+  if (signal?.aborted) return new Map();
+
   await Promise.all(
     records.map(async (r) => {
+      if (signal?.aborted) return;
       try {
         const base64 = await api.readAssetThumbnailBase64!(projectId, r.id);
+        if (signal?.aborted) return;
         map.set(r.id, { thumbnailSrc: base64 ?? undefined, fullSrc: undefined });
       } catch {
         map.set(r.id, { thumbnailSrc: undefined, fullSrc: undefined });

@@ -29,6 +29,7 @@ export const useAppStore = create<AppState>()(
         config: state.config,
         result: state.result,
         manualEdits: state.manualEdits,
+        manualEditNextRevision: state.manualEditNextRevision,
         selectedIds: state.selectedIds,
         projectName: state.projectName,
       }),

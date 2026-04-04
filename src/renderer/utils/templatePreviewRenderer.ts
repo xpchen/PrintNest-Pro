@@ -294,6 +294,11 @@ export async function batchPreRenderInstances(
 
       if (blob) {
         const url = URL.createObjectURL(blob);
+        // 释放可能被并发渲染覆盖的旧 blob URL
+        const existing = cache.get(input.instance.id);
+        if (existing) {
+          URL.revokeObjectURL(existing.blobUrl);
+        }
         cache.set(input.instance.id, { generation: gen, blobUrl: url });
         blobUrls.set(input.instance.id, url);
         // 同时转 base64 用于磁盘缓存

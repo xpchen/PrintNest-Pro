@@ -141,104 +141,107 @@ async function exportPdf(options: PdfExportOptions): Promise<void> {
   const stream = fs.createWriteStream(outputPath);
   doc.pipe(stream);
 
-  for (let ci = 0; ci < canvases.length; ci++) {
-    const canvas = canvases[ci];
-    doc.addPage();
+  try {
+    for (let ci = 0; ci < canvases.length; ci++) {
+      const canvas = canvases[ci];
+      doc.addPage();
 
-    // 白色背景
-    doc.rect(bleedPt, bleedPt, canvasWidth * MM_TO_PT, canvasHeight * MM_TO_PT)
-       .fill('#ffffff');
+      // 白色背景
+      doc.rect(bleedPt, bleedPt, canvasWidth * MM_TO_PT, canvasHeight * MM_TO_PT)
+         .fill('#ffffff');
 
-    // 绘制每个元素
-    for (const p of canvas.placements) {
-      const px = (p.x + bleed) * MM_TO_PT;
-      const py = (p.y + bleed) * MM_TO_PT;
-      const pw = p.width * MM_TO_PT;
-      const ph = p.height * MM_TO_PT;
+      // 绘制每个元素
+      for (const p of canvas.placements) {
+        const px = (p.x + bleed) * MM_TO_PT;
+        const py = (p.y + bleed) * MM_TO_PT;
+        const pw = p.width * MM_TO_PT;
+        const ph = p.height * MM_TO_PT;
 
-      // 尝试嵌入图片
-      let imageDrawn = false;
+        // 尝试嵌入图片
+        let imageDrawn = false;
 
-      // 解析图片源
-      let imgSrc: string | Buffer | undefined;
-      try {
-        const managedPath =
-          projectId && p.assetId ? resolveManagedAssetPath(projectId, p.assetId) : undefined;
-        if (p.imagePath && fs.existsSync(p.imagePath)) {
-          imgSrc = p.imagePath;
-        } else if (managedPath) {
-          imgSrc = managedPath;
-        } else if (p.imageBase64) {
-          imgSrc = base64ToBuffer(p.imageBase64);
-        }
-      } catch (err) {
-        log.export.warn('image load failed, using fallback', { name: p.name, err });
-      }
-
-      if (imgSrc) {
+        // 解析图片源
+        let imgSrc: string | Buffer | undefined;
         try {
-          if (p.rotated) {
-            // 旋转 90°：原始图片尺寸为 height x width（旋转前），
-            // 需要在 placement 的 bounding box (pw x ph) 中绘制旋转后的图片
-            doc.save();
-            // 移到 placement 中心，旋转 90°，再偏移绘制
-            doc.translate(px + pw / 2, py + ph / 2);
-            doc.rotate(90);
-            // 旋转后坐标系交换：绘制原图（宽=ph, 高=pw）
-            doc.image(imgSrc, -ph / 2, -pw / 2, { width: ph, height: pw });
-            doc.restore();
-          } else {
-            doc.image(imgSrc, px, py, { width: pw, height: ph });
+          const managedPath =
+            projectId && p.assetId ? resolveManagedAssetPath(projectId, p.assetId) : undefined;
+          if (p.imagePath && fs.existsSync(p.imagePath)) {
+            imgSrc = p.imagePath;
+          } else if (managedPath) {
+            imgSrc = managedPath;
+          } else if (p.imageBase64) {
+            imgSrc = base64ToBuffer(p.imageBase64);
           }
-          imageDrawn = true;
         } catch (err) {
-          log.export.warn('image draw failed, using fallback', { name: p.name, err });
+          log.export.warn('image load failed, using fallback', { name: p.name, err });
         }
+
+        if (imgSrc) {
+          try {
+            if (p.rotated) {
+              doc.save();
+              doc.translate(px + pw / 2, py + ph / 2);
+              doc.rotate(90);
+              doc.image(imgSrc, -ph / 2, -pw / 2, { width: ph, height: pw });
+              doc.restore();
+            } else {
+              doc.image(imgSrc, px, py, { width: pw, height: ph });
+            }
+            imageDrawn = true;
+          } catch (err) {
+            log.export.warn('image draw failed, using fallback', { name: p.name, err });
+          }
+        }
+
+        if (!imageDrawn) {
+          // 色块 fallback
+          doc.rect(px, py, pw, ph).fill(p.color || '#cccccc');
+        }
+
+        // 轻描边
+        doc.rect(px, py, pw, ph).stroke('#cccccc');
       }
 
-      if (!imageDrawn) {
-        // 色块 fallback
-        doc.rect(px, py, pw, ph).fill(p.color || '#cccccc');
+      // 出血裁切标记
+      if (showCropMarks) {
+        drawCropMarks(doc, canvasWidth, canvasHeight, bleed);
       }
 
-      // 轻描边
-      doc.rect(px, py, pw, ph).stroke('#cccccc');
-    }
+      // 安全边距虚线框
+      const safeMm = edgeSafeMm ?? 0;
+      if (safeMm > 0 && safeMm * 2 < canvasWidth && safeMm * 2 < canvasHeight) {
+        const safePt = safeMm * MM_TO_PT;
+        doc.save();
+        doc.rect(
+          bleedPt + safePt,
+          bleedPt + safePt,
+          (canvasWidth - safeMm * 2) * MM_TO_PT,
+          (canvasHeight - safeMm * 2) * MM_TO_PT,
+        )
+          .dash(4, { space: 3 })
+          .strokeColor('#ff6600')
+          .lineWidth(0.5)
+          .stroke();
+        doc.restore();
+      }
 
-    // 出血裁切标记
-    if (showCropMarks) {
-      drawCropMarks(doc, canvasWidth, canvasHeight, bleed);
-    }
-
-    // 安全边距虚线框
-    const safeMm = edgeSafeMm ?? 0;
-    if (safeMm > 0 && safeMm * 2 < canvasWidth && safeMm * 2 < canvasHeight) {
-      const safePt = safeMm * MM_TO_PT;
+      // 画布边界线（虚线）
       doc.save();
-      doc.rect(
-        bleedPt + safePt,
-        bleedPt + safePt,
-        (canvasWidth - safeMm * 2) * MM_TO_PT,
-        (canvasHeight - safeMm * 2) * MM_TO_PT,
-      )
-        .dash(4, { space: 3 })
-        .strokeColor('#ff6600')
-        .lineWidth(0.5)
-        .stroke();
+      doc.rect(bleedPt, bleedPt, canvasWidth * MM_TO_PT, canvasHeight * MM_TO_PT)
+         .dash(3, { space: 2 })
+         .strokeColor('#999999')
+         .lineWidth(0.5)
+         .stroke();
       doc.restore();
     }
 
-    // 画布边界线（虚线）
-    doc.save();
-    doc.rect(bleedPt, bleedPt, canvasWidth * MM_TO_PT, canvasHeight * MM_TO_PT)
-       .dash(3, { space: 2 })
-       .strokeColor('#999999')
-       .lineWidth(0.5)
-       .stroke();
-    doc.restore();
+    doc.end();
+  } catch (err) {
+    // 确保异常时 doc 和 stream 都被正确关闭
+    try { doc.end(); } catch { /* ignore */ }
+    stream.destroy();
+    throw err;
   }
-
-  doc.end();
 
   return new Promise<void>((resolve, reject) => {
     stream.on('finish', () => {

@@ -8,6 +8,7 @@ import type { SerializedEditorState } from '../../../shared/persistence/editorSt
 import type { PrintItem, DataRecord, TemplateDefinition, TemplateInstance } from '../../../shared/types';
 import { getOrOpenProjectDb } from '../projectDb';
 import { getProjectDirectory } from '../../projectPaths';
+import { log } from '../../../shared/logger';
 
 function readLegacyProjectJson(projectId: string): SerializedEditorState | null {
   const dir = getProjectDirectory(projectId);
@@ -328,11 +329,11 @@ export function saveEditorState(
   projectId: string,
   state: SerializedEditorState,
   options: SaveEditorOptions = { jsonSnapshot: true },
-): void {
+): boolean {
   const db = getOrOpenProjectDb(projectId);
   if (!db) {
     if (options.jsonSnapshot) writeJsonSnapshot(projectId, state);
-    return;
+    return false;
   }
 
   const now = new Date().toISOString();
@@ -396,11 +397,21 @@ export function saveEditorState(
     }
   });
 
-  tx();
+  try {
+    tx();
+  } catch (err) {
+    log.db.error('saveEditorState transaction failed', { projectId, err });
+    // DB 写入失败，尝试 JSON 快照作为 fallback
+    if (options.jsonSnapshot) {
+      writeJsonSnapshot(projectId, state);
+    }
+    return false;
+  }
 
   if (options.jsonSnapshot) {
     writeJsonSnapshot(projectId, state);
   }
+  return true;
 }
 
 /** 无 asset 或素材缺失时，从 project.json 快照补 imageSrc（过渡：避免纯 DB 丢预览） */

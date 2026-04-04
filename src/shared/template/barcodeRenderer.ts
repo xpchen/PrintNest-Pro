@@ -78,6 +78,10 @@ export async function drawBarcodeToCtx(
   scale: number,
   showHumanReadable: boolean,
 ): Promise<void> {
+  if (!value) {
+    drawBarcodePlaceholder(ctx, value, format, dx, dy, dw, dh, scale, showHumanReadable);
+    return;
+  }
   try {
     const bwipjs = await import('bwip-js') as unknown as BwipModule;
     const bcid = FORMAT_MAP[format] || 'code128';
@@ -191,11 +195,20 @@ export async function drawQrCodeToCtx(
   dw: number,
   dh: number,
 ): Promise<void> {
+  if (!value) {
+    drawQrCodePlaceholder(ctx, dx, dy, dw, dh);
+    return;
+  }
   try {
     const QRCode = await import('qrcode') as unknown as QRCodeModule;
     const qr = QRCode.create(value, { errorCorrectionLevel: 'M' });
     const modules = qr.modules;
     const moduleCount = modules.size;
+
+    if (moduleCount === 0) {
+      drawQrCodePlaceholder(ctx, dx, dy, dw, dh);
+      return;
+    }
 
     // 白色背景
     ctx.fillStyle = '#ffffff';

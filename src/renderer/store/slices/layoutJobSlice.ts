@@ -344,6 +344,7 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
 
   runAutoLayoutFromInstances: async () => {
     const s = get();
+    const startProjectId = s.currentProjectId;
     // 过滤掉 error 状态的实例
     const readyInstances = s.templateInstances.filter((i) => i.status !== 'error');
     if (readyInstances.length === 0) {
@@ -361,6 +362,12 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
     // 先设 items（metadata 可读回退），立即跑排版 → 用户秒看到结果
     set({ items: printItems });
     await get().runAutoLayout();
+
+    // ── 异步恢复后检查：项目可能已切换 ──
+    if (get().currentProjectId !== startProjectId) {
+      log.engine.warn('project switched during layout, aborting post-render', { startProjectId });
+      return;
+    }
 
     // 排版完成后，后台异步预渲染位图，逐批更新画布
     const tplMap = new Map(s.templates.map((t) => [t.id, t]));
@@ -386,12 +393,23 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
           const { batchPreRenderInstances, bumpRenderGeneration } = await import('../../utils/templatePreviewRenderer');
           const { fetchAssetMap } = await import('../../hooks/useAssetMap');
           bumpRenderGeneration();
-          const assetMap = await fetchAssetMap(s.currentProjectId);
+
+          // 检查项目是否仍然一致
+          if (get().currentProjectId !== startProjectId) {
+            log.engine.warn('project switched before fetchAssetMap, aborting', { startProjectId });
+            return;
+          }
+          const assetMap = await fetchAssetMap(startProjectId);
 
           // 分批渲染并逐批更新 items，每批 50 个
           const BATCH = 50;
           const allBase64: { id: string; base64: string }[] = [];
           for (let i = 0; i < preRenderInputs.length; i += BATCH) {
+            // 每批前检查项目一致性
+            if (get().currentProjectId !== startProjectId) {
+              log.engine.warn('project switched during pre-render batch, aborting', { startProjectId });
+              return;
+            }
             const chunk = preRenderInputs.slice(i, i + BATCH);
             const { blobUrls, base64Map } = await batchPreRenderInstances(chunk, assetMap);
 
@@ -416,10 +434,15 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
           // 后台保存 PNG 到磁盘（下次打开项目可直接读取）
           const api = window.electronAPI;
           if (api?.savePreviewSnapshots && allBase64.length > 0) {
+            // 保存前再次检查项目一致性
+            if (get().currentProjectId !== startProjectId) {
+              log.engine.warn('project switched before saving snapshots, aborting', { startProjectId });
+              return;
+            }
             const SAVE_BATCH = 100;
             for (let i = 0; i < allBase64.length; i += SAVE_BATCH) {
               const chunk = allBase64.slice(i, i + SAVE_BATCH);
-              await api.savePreviewSnapshots(s.currentProjectId, chunk);
+              await api.savePreviewSnapshots(startProjectId, chunk);
             }
             log.engine.info('preview snapshots saved to disk', { count: allBase64.length });
           }
