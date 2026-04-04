@@ -5,9 +5,12 @@
  * 实例化引擎和排版接入在 Phase 3 接入。
  */
 import type { StateCreator } from 'zustand';
-import type { DataRecord, TemplateDefinition, TemplateInstance } from '../../../shared/types';
+import type { DataRecord, TemplateDefinition, TemplateElement, TemplateInstance } from '../../../shared/types';
 import type { AppState, TemplateSlice } from '../types';
 import { instantiateTemplate } from '../../../shared/template/instantiate';
+
+/** 模块级剪贴板（不进 store，不触发 persist/history） */
+let _elementClipboard: TemplateElement[] = [];
 
 export const createTemplateSlice: StateCreator<AppState, [], [], TemplateSlice> = (set, get) => ({
   dataRecords: [],
@@ -108,6 +111,40 @@ export const createTemplateSlice: StateCreator<AppState, [], [], TemplateSlice> 
         return { ...t, elements: reordered, updatedAt: new Date().toISOString() };
       }),
     })),
+
+  copySelectedElements: () => {
+    const s = get();
+    const tpl = s.templates.find((t) => t.id === s.currentTemplateId);
+    if (!tpl || s.selectedElementIds.length === 0) return;
+    const copied = tpl.elements.filter((el) => s.selectedElementIds.includes(el.id));
+    _elementClipboard = copied.map((el) => ({ ...el }));
+  },
+
+  pasteElements: () => {
+    const s = get();
+    const tpl = s.templates.find((t) => t.id === s.currentTemplateId);
+    if (!tpl || _elementClipboard.length === 0) return;
+    const newIds: string[] = [];
+    const newElements = _elementClipboard.map((el) => {
+      const id = `el_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      newIds.push(id);
+      return {
+        ...el,
+        id,
+        xMm: el.xMm + 5,
+        yMm: el.yMm + 5,
+        zIndex: tpl.elements.length + newIds.length - 1,
+      };
+    });
+    set((prev) => ({
+      templates: prev.templates.map((t) =>
+        t.id === s.currentTemplateId
+          ? { ...t, elements: [...t.elements, ...newElements], updatedAt: new Date().toISOString() }
+          : t,
+      ),
+      selectedElementIds: newIds,
+    }));
+  },
 
   instantiateAll: () => {
     const s = get();

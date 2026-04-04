@@ -1917,3 +1917,140 @@ body {
 .preflight__item--fail .preflight__icon { color: var(--color-danger); }
 .preflight__label { font-weight: 500; min-width: 60px; }
 .preflight__detail { color: var(--text-secondary); flex: 1; }
+
+/* ── Context Menu ── */
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  background: var(--surface-overlay, #1e1e2e);
+  border: 1px solid var(--border, #3a3a4a);
+  border-radius: 6px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,.35);
+  font-size: 13px;
+}
+.context-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text-primary, #e0e0e0);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.context-menu__item:hover:not(.context-menu__item--disabled) {
+  background: var(--accent, #3b82f6);
+  color: #fff;
+}
+.context-menu__item--disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.context-menu__item--danger { color: var(--color-danger, #ef4444); }
+.context-menu__item--danger:hover:not(.context-menu__item--disabled) {
+  background: var(--color-danger, #ef4444);
+  color: #fff;
+}
+.context-menu__shortcut {
+  margin-left: 24px;
+  font-size: 11px;
+  opacity: 0.6;
+}
+.context-menu__separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border, #3a3a4a);
+}
+
+/* ── Spinner ── */
+.spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid var(--border, #3a3a4a);
+  border-top-color: var(--accent, #3b82f6);
+  animation: spin 0.6s linear infinite;
+}
+.spinner--sm { border-width: 2px; }
+.spinner--md { border-width: 3px; }
+.spinner--lg { border-width: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Loading Overlay ── */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0,0,0,.55);
+}
+.loading-overlay__label {
+  color: var(--text-primary, #e0e0e0);
+  font-size: 14px;
+}
+
+/* ── Toast ── */
+.toast-stack {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 9500;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--surface-overlay, #1e1e2e);
+  border-left: 4px solid var(--accent, #3b82f6);
+  box-shadow: 0 2px 12px rgba(0,0,0,.3);
+  font-size: 13px;
+  color: var(--text-primary, #e0e0e0);
+  animation: toast-in 0.2s ease;
+}
+@keyframes toast-in { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+.toast--info { border-left-color: var(--accent, #3b82f6); }
+.toast--success { border-left-color: var(--color-success, #22c55e); }
+.toast--warning { border-left-color: #f59e0b; }
+.toast--error { border-left-color: var(--color-danger, #ef4444); }
+.toast__message { flex: 1; }
+.toast__close {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #999);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.toast__close:hover { color: var(--text-primary, #e0e0e0); }
+
+/* ── History Run Panel (OutputCenter) ── */
+.oc-runs { margin-top: 12px; }
+.oc-runs__title { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.oc-runs__empty { font-size: 12px; color: var(--text-secondary); padding: 6px 0; }
+.oc-runs__list { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow-y: auto; }
+.oc-runs__item {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.oc-runs__item:hover { background: var(--surface-hover, #2a2a3a); }
+.oc-runs__item--active { background: var(--accent, #3b82f6); color: #fff; }
+.oc-runs__item-label { font-weight: 500; }
+.oc-runs__item-time { color: var(--text-secondary); }
+.oc-runs__item--active .oc-runs__item-time { color: rgba(255,255,255,.8); }
+.oc-runs__item-stats { font-size: 11px; color: var(--text-secondary); }
+.oc-runs__item--active .oc-runs__item-stats { color: rgba(255,255,255,.7); }

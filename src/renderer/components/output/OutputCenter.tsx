@@ -123,6 +123,53 @@ const ExportHistoryPanel: React.FC<{ entries: ExportHistoryEntry[] }> = ({ entri
   </div>
 );
 
+/* ── 历史排版 Run 列表 ── */
+interface LayoutRunRow {
+  id: string;
+  created_at: string;
+  duration_ms: number;
+  utilization: number;
+  unplaced_count: number;
+  canvas_count: number;
+  placement_count?: number;
+}
+
+const HistoryRunPanel: React.FC<{
+  runs: LayoutRunRow[];
+  selectedRunId: string | null;
+  onSelect: (id: string | null) => void;
+}> = ({ runs, selectedRunId, onSelect }) => (
+  <div className="oc-runs">
+    <div className="oc-runs__title">历史排版</div>
+    {runs.length === 0 ? (
+      <div className="oc-runs__empty">暂无历史排版</div>
+    ) : (
+      <ul className="oc-runs__list">
+        <li
+          className={`oc-runs__item ${selectedRunId === null ? 'oc-runs__item--active' : ''}`}
+          onClick={() => onSelect(null)}
+        >
+          <span className="oc-runs__item-label">当前结果</span>
+        </li>
+        {runs.map((r) => (
+          <li
+            key={r.id}
+            className={`oc-runs__item ${selectedRunId === r.id ? 'oc-runs__item--active' : ''}`}
+            onClick={() => onSelect(r.id)}
+          >
+            <span className="oc-runs__item-time">
+              {new Date(r.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+            </span>
+            <span className="oc-runs__item-stats">
+              {r.canvas_count}版 · {r.placement_count ?? '?'}件 · {Math.round(r.utilization)}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+);
+
 /* ── OutputCenter 主组件 ── */
 export const OutputCenter: React.FC = () => {
   const currentProjectId = useAppStore((s) => s.currentProjectId);
@@ -132,11 +179,13 @@ export const OutputCenter: React.FC = () => {
   const [profiles, setProfiles] = useState<ExportProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [history, setHistory] = useState<ExportHistoryEntry[]>([]);
+  const [runs, setRuns] = useState<LayoutRunRow[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const api = window.electronAPI;
 
-  // 加载预设和历史
+  // 加载预设、历史和排版 run 列表
   useEffect(() => {
     if (!currentProjectId || !api) return;
     api.listExportProfiles?.(currentProjectId).then((ps) => {
@@ -145,6 +194,7 @@ export const OutputCenter: React.FC = () => {
       if (typed.length > 0 && !selectedProfileId) setSelectedProfileId(typed[0].id);
     });
     api.listExportHistory?.(currentProjectId, 20).then((hs) => setHistory(hs as ExportHistoryEntry[]));
+    api.listLayoutRuns?.(currentProjectId).then((rs) => setRuns((rs as LayoutRunRow[]) ?? []));
   }, [currentProjectId]);
 
   const handleAddProfile = useCallback(async () => {
@@ -182,7 +232,41 @@ export const OutputCenter: React.FC = () => {
   }, [currentProjectId, selectedProfileId, api, showConfirm]);
 
   const handleExportAll = useCallback(async () => {
-    if (!api || !result || result.canvases.length === 0) return;
+    if (!api) return;
+
+    // 历史 run 导出
+    if (selectedRunId) {
+      const items = useAppStore.getState().items;
+      const payload = await api.getRunRestorePayload?.(currentProjectId, selectedRunId, items);
+      if (!payload || !(payload as { result?: unknown }).result) return;
+      const restored = payload as { result: { canvases: typeof result extends null ? never : NonNullable<typeof result>['canvases'] }; config: { canvas: { width: number; height: number } } };
+      const outPath = await api.saveFile(`PrintNest-Run-${selectedRunId.slice(0, 8)}.pdf`, 'PDF', ['pdf']);
+      if (!outPath) return;
+      setExporting(true);
+      try {
+        const res = await api.exportPdf({
+          canvases: restored.result.canvases,
+          config: { widthMm: restored.config.canvas.width, heightMm: restored.config.canvas.height },
+          outputPath: outPath,
+        });
+        if (currentProjectId && api.recordExportHistory) {
+          const entry: ExportHistoryEntry = {
+            id: genId(), profileId: selectedProfileId, runId: selectedRunId,
+            outputPath: outPath, format: 'pdf', createdAt: new Date().toISOString(),
+            fileSizeBytes: null, canvasCount: restored.result.canvases.length,
+            status: res.success ? 'success' : 'failed',
+          };
+          await api.recordExportHistory(currentProjectId, entry);
+          setHistory((prev) => [entry, ...prev]);
+        }
+      } finally {
+        setExporting(false);
+      }
+      return;
+    }
+
+    // 当前结果导出
+    if (!result || result.canvases.length === 0) return;
     const outPath = await api.saveFile('PrintNest-Output.pdf', 'PDF', ['pdf']);
     if (!outPath) return;
 
@@ -194,17 +278,11 @@ export const OutputCenter: React.FC = () => {
         outputPath: outPath,
       });
 
-      // 记录导出历史
       if (currentProjectId && api.recordExportHistory) {
         const entry: ExportHistoryEntry = {
-          id: genId(),
-          profileId: selectedProfileId,
-          runId: null,
-          outputPath: outPath,
-          format: 'pdf',
-          createdAt: new Date().toISOString(),
-          fileSizeBytes: null,
-          canvasCount: result.canvases.length,
+          id: genId(), profileId: selectedProfileId, runId: null,
+          outputPath: outPath, format: 'pdf', createdAt: new Date().toISOString(),
+          fileSizeBytes: null, canvasCount: result.canvases.length,
           status: res.success ? 'success' : 'failed',
         };
         await api.recordExportHistory(currentProjectId, entry);
@@ -213,7 +291,7 @@ export const OutputCenter: React.FC = () => {
     } finally {
       setExporting(false);
     }
-  }, [api, result, config, currentProjectId, selectedProfileId]);
+  }, [api, result, config, currentProjectId, selectedProfileId, selectedRunId]);
 
   return (
     <div className="output-center">
@@ -225,6 +303,11 @@ export const OutputCenter: React.FC = () => {
           onAdd={handleAddProfile}
           onDelete={handleDeleteProfile}
         />
+        <HistoryRunPanel
+          runs={runs}
+          selectedRunId={selectedRunId}
+          onSelect={setSelectedRunId}
+        />
         <PreflightChecklist />
       </div>
       <div className="output-center__center">
@@ -232,10 +315,10 @@ export const OutputCenter: React.FC = () => {
         <div className="output-center__actions">
           <button
             className="output-center__export-btn"
-            disabled={exporting || !result || result.canvases.length === 0}
+            disabled={exporting || (!selectedRunId && (!result || result.canvases.length === 0))}
             onClick={handleExportAll}
           >
-            {exporting ? '导出中…' : '导出全部 PDF'}
+            {exporting ? '导出中…' : selectedRunId ? '导出历史排版 PDF' : '导出全部 PDF'}
           </button>
         </div>
       </div>

@@ -7,6 +7,7 @@ import type { TemplateElement } from '../../../shared/types';
 import { resolveTemplateDrawables } from '../../../shared/template/resolveDrawables';
 import type { ResolvedDrawable } from '../../../shared/types/template-render';
 import { useAssetMap } from '../../hooks/useAssetMap';
+import { ContextMenu, type ContextMenuItem } from '../ContextMenu';
 
 const CANVAS_PADDING = 20;
 const PX_PER_MM = 3;
@@ -22,6 +23,25 @@ interface DragState {
   origXMm: number;
   origYMm: number;
 }
+
+interface ResizeState {
+  elementId: string;
+  handle: 'tl' | 'tr' | 'bl' | 'br';
+  startX: number;
+  startY: number;
+  origXMm: number;
+  origYMm: number;
+  origWMm: number;
+  origHMm: number;
+}
+
+interface AlignGuide {
+  axis: 'x' | 'y';
+  pos: number; // mm
+}
+
+const MIN_SIZE_MM = 2;
+const SNAP_THRESHOLD_MM = 1;
 
 /** SVG 文本对齐映射 */
 function svgTextAnchor(align?: 'left' | 'center' | 'right'): 'start' | 'middle' | 'end' {
@@ -166,6 +186,9 @@ export const TemplateCanvas: React.FC = () => {
   const selectElements = useAppStore((s) => s.selectElements);
   const addElement = useAppStore((s) => s.addElement);
   const updateElement = useAppStore((s) => s.updateElement);
+  const removeElement = useAppStore((s) => s.removeElement);
+  const copySelectedElements = useAppStore((s) => s.copySelectedElements);
+  const pasteElements = useAppStore((s) => s.pasteElements);
   const dataRecords = useAppStore((s) => s.dataRecords);
   const previewRecordId = useAppStore((s) => s.previewRecordId);
   const setPreviewRecordId = useAppStore((s) => s.setPreviewRecordId);
@@ -178,6 +201,9 @@ export const TemplateCanvas: React.FC = () => {
   const canvasH = (tpl?.heightMm ?? 60) * PX_PER_MM;
 
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [resizeState, setResizeState] = useState<ResizeState | null>(null);
+  const [alignGuides, setAlignGuides] = useState<AlignGuide[]>([]);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; elementId?: string } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   // 统一渲染协议：从模板 + 预览记录 → drawables
@@ -275,21 +301,207 @@ export const TemplateCanvas: React.FC = () => {
     [currentTemplateId, tpl, selectedElementIds, selectElements],
   );
 
+  /** 检测元素与其他元素的对齐线 */
+  const detectAlignGuides = useCallback(
+    (activeId: string, xMm: number, yMm: number, wMm: number, hMm: number): AlignGuide[] => {
+      if (!tpl) return [];
+      const guides: AlignGuide[] = [];
+      const edges = {
+        left: xMm,
+        centerX: xMm + wMm / 2,
+        right: xMm + wMm,
+        top: yMm,
+        centerY: yMm + hMm / 2,
+        bottom: yMm + hMm,
+      };
+
+      for (const el of tpl.elements) {
+        if (el.id === activeId || el.hidden) continue;
+        const otherEdges = {
+          left: el.xMm,
+          centerX: el.xMm + el.widthMm / 2,
+          right: el.xMm + el.widthMm,
+          top: el.yMm,
+          centerY: el.yMm + el.heightMm / 2,
+          bottom: el.yMm + el.heightMm,
+        };
+
+        for (const ax of [edges.left, edges.centerX, edges.right]) {
+          for (const ox of [otherEdges.left, otherEdges.centerX, otherEdges.right]) {
+            if (Math.abs(ax - ox) < SNAP_THRESHOLD_MM) {
+              guides.push({ axis: 'x', pos: ox });
+            }
+          }
+        }
+        for (const ay of [edges.top, edges.centerY, edges.bottom]) {
+          for (const oy of [otherEdges.top, otherEdges.centerY, otherEdges.bottom]) {
+            if (Math.abs(ay - oy) < SNAP_THRESHOLD_MM) {
+              guides.push({ axis: 'y', pos: oy });
+            }
+          }
+        }
+      }
+
+      const seen = new Set<string>();
+      return guides.filter((g) => {
+        const key = `${g.axis}:${g.pos}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    },
+    [tpl],
+  );
+
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dragState || !currentTemplateId) return;
-      const dx = (e.clientX - dragState.startX) / PX_PER_MM;
-      const dy = (e.clientY - dragState.startY) / PX_PER_MM;
-      const newX = Math.round((dragState.origXMm + dx) * 2) / 2;
-      const newY = Math.round((dragState.origYMm + dy) * 2) / 2;
-      updateElement(currentTemplateId, dragState.elementId, { xMm: newX, yMm: newY });
+      if (!currentTemplateId) return;
+
+      if (resizeState) {
+        const dx = (e.clientX - resizeState.startX) / PX_PER_MM;
+        const dy = (e.clientY - resizeState.startY) / PX_PER_MM;
+
+        let newX = resizeState.origXMm;
+        let newY = resizeState.origYMm;
+        let newW = resizeState.origWMm;
+        let newH = resizeState.origHMm;
+
+        switch (resizeState.handle) {
+          case 'br':
+            newW = Math.max(MIN_SIZE_MM, Math.round((resizeState.origWMm + dx) * 2) / 2);
+            newH = Math.max(MIN_SIZE_MM, Math.round((resizeState.origHMm + dy) * 2) / 2);
+            break;
+          case 'bl':
+            newW = Math.max(MIN_SIZE_MM, Math.round((resizeState.origWMm - dx) * 2) / 2);
+            newH = Math.max(MIN_SIZE_MM, Math.round((resizeState.origHMm + dy) * 2) / 2);
+            newX = resizeState.origXMm + resizeState.origWMm - newW;
+            break;
+          case 'tr':
+            newW = Math.max(MIN_SIZE_MM, Math.round((resizeState.origWMm + dx) * 2) / 2);
+            newH = Math.max(MIN_SIZE_MM, Math.round((resizeState.origHMm - dy) * 2) / 2);
+            newY = resizeState.origYMm + resizeState.origHMm - newH;
+            break;
+          case 'tl':
+            newW = Math.max(MIN_SIZE_MM, Math.round((resizeState.origWMm - dx) * 2) / 2);
+            newH = Math.max(MIN_SIZE_MM, Math.round((resizeState.origHMm - dy) * 2) / 2);
+            newX = resizeState.origXMm + resizeState.origWMm - newW;
+            newY = resizeState.origYMm + resizeState.origHMm - newH;
+            break;
+        }
+
+        updateElement(currentTemplateId, resizeState.elementId, {
+          xMm: newX,
+          yMm: newY,
+          widthMm: newW,
+          heightMm: newH,
+        });
+        setAlignGuides(detectAlignGuides(resizeState.elementId, newX, newY, newW, newH));
+        return;
+      }
+
+      if (dragState) {
+        const dx = (e.clientX - dragState.startX) / PX_PER_MM;
+        const dy = (e.clientY - dragState.startY) / PX_PER_MM;
+        const newX = Math.round((dragState.origXMm + dx) * 2) / 2;
+        const newY = Math.round((dragState.origYMm + dy) * 2) / 2;
+        updateElement(currentTemplateId, dragState.elementId, { xMm: newX, yMm: newY });
+
+        // 检测对齐辅助线
+        const el = tpl?.elements.find((x) => x.id === dragState.elementId);
+        if (el) {
+          setAlignGuides(detectAlignGuides(dragState.elementId, newX, newY, el.widthMm, el.heightMm));
+        }
+      }
     },
-    [dragState, currentTemplateId, updateElement],
+    [dragState, resizeState, currentTemplateId, tpl, updateElement, detectAlignGuides],
   );
 
   const handleMouseUp = useCallback(() => {
     setDragState(null);
+    setResizeState(null);
+    setAlignGuides([]);
   }, []);
+
+  /** Resize 手柄 mousedown */
+  const handleResizeDown = useCallback(
+    (elementId: string, handle: ResizeState['handle'], e: React.MouseEvent) => {
+      if (!currentTemplateId || !tpl) return;
+      const el = tpl.elements.find((x) => x.id === elementId);
+      if (!el || el.locked) return;
+      e.stopPropagation();
+      e.preventDefault();
+      setResizeState({
+        elementId,
+        handle,
+        startX: e.clientX,
+        startY: e.clientY,
+        origXMm: el.xMm,
+        origYMm: el.yMm,
+        origWMm: el.widthMm,
+        origHMm: el.heightMm,
+      });
+    },
+    [currentTemplateId, tpl],
+  );
+
+  /** 右键菜单 */
+  const handleContextMenu = useCallback(
+    (elementId: string | undefined, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (elementId && !selectedElementIds.includes(elementId)) {
+        selectElements([elementId]);
+      }
+      setCtxMenu({ x: e.clientX, y: e.clientY, elementId });
+    },
+    [selectedElementIds, selectElements],
+  );
+
+  const ctxMenuItems = useMemo((): ContextMenuItem[] => {
+    const hasSelection = selectedElementIds.length > 0;
+    const el = ctxMenu?.elementId ? tpl?.elements.find((e) => e.id === ctxMenu.elementId) : null;
+    return [
+      { id: 'copy', label: '复制', shortcut: '⌘C', disabled: !hasSelection },
+      { id: 'paste', label: '粘贴', shortcut: '⌘V' },
+      { id: 'sep1', label: '', separator: true },
+      { id: 'lock', label: el?.locked ? '解锁' : '锁定', disabled: !hasSelection },
+      { id: 'hide', label: el?.hidden ? '显示' : '隐藏', disabled: !hasSelection },
+      { id: 'sep2', label: '', separator: true },
+      { id: 'delete', label: '删除', shortcut: 'Del', disabled: !hasSelection, danger: true },
+    ];
+  }, [selectedElementIds, ctxMenu, tpl]);
+
+  const handleCtxMenuSelect = useCallback(
+    (id: string) => {
+      if (!currentTemplateId) return;
+      switch (id) {
+        case 'copy':
+          copySelectedElements();
+          break;
+        case 'paste':
+          pasteElements();
+          break;
+        case 'lock':
+          for (const elId of selectedElementIds) {
+            const el = tpl?.elements.find((e) => e.id === elId);
+            if (el) updateElement(currentTemplateId, elId, { locked: !el.locked });
+          }
+          break;
+        case 'hide':
+          for (const elId of selectedElementIds) {
+            const el = tpl?.elements.find((e) => e.id === elId);
+            if (el) updateElement(currentTemplateId, elId, { hidden: !el.hidden });
+          }
+          break;
+        case 'delete':
+          for (const elId of [...selectedElementIds]) {
+            removeElement(currentTemplateId, elId);
+          }
+          break;
+      }
+    },
+    [currentTemplateId, selectedElementIds, tpl, updateElement, removeElement, copySelectedElements, pasteElements],
+  );
 
   if (!tpl) {
     return (
@@ -375,10 +587,11 @@ export const TemplateCanvas: React.FC = () => {
             width={canvasW + CANVAS_PADDING * 2}
             height={canvasH + CANVAS_PADDING * 2}
             onClick={handleClickCanvas}
+            onContextMenu={(e) => handleContextMenu(undefined, e)}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            style={{ cursor: dragState ? 'grabbing' : undefined }}
+            style={{ cursor: resizeState ? 'nwse-resize' : dragState ? 'grabbing' : undefined }}
           >
             {/* 模板背景 */}
             <rect
@@ -406,6 +619,7 @@ export const TemplateCanvas: React.FC = () => {
                     key={d.elementId}
                     onClick={(e) => handleClickElement(d.elementId, e)}
                     onMouseDown={(e) => handleMouseDown(d.elementId, e)}
+                    onContextMenu={(e) => handleContextMenu(d.elementId, e)}
                     style={{ cursor: d.locked ? 'not-allowed' : 'grab' }}
                   >
                     {/* 真实内容渲染 */}
@@ -425,18 +639,60 @@ export const TemplateCanvas: React.FC = () => {
                       />
                     )}
 
-                    {/* 选中手柄 */}
+                    {/* 选中手柄（可 resize） */}
                     {selected && !d.locked && (
                       <>
-                        <rect x={x - 3} y={y - 3} width={6} height={6} fill="var(--accent, #3b82f6)" />
-                        <rect x={x + w - 3} y={y - 3} width={6} height={6} fill="var(--accent, #3b82f6)" />
-                        <rect x={x - 3} y={y + h - 3} width={6} height={6} fill="var(--accent, #3b82f6)" />
-                        <rect x={x + w - 3} y={y + h - 3} width={6} height={6} fill="var(--accent, #3b82f6)" />
+                        {([
+                          { handle: 'tl' as const, hx: x - 4, hy: y - 4, cursor: 'nwse-resize' },
+                          { handle: 'tr' as const, hx: x + w - 4, hy: y - 4, cursor: 'nesw-resize' },
+                          { handle: 'bl' as const, hx: x - 4, hy: y + h - 4, cursor: 'nesw-resize' },
+                          { handle: 'br' as const, hx: x + w - 4, hy: y + h - 4, cursor: 'nwse-resize' },
+                        ]).map(({ handle, hx, hy, cursor }) => (
+                          <rect
+                            key={handle}
+                            x={hx}
+                            y={hy}
+                            width={8}
+                            height={8}
+                            fill="var(--accent, #3b82f6)"
+                            style={{ cursor }}
+                            onMouseDown={(e) => handleResizeDown(d.elementId, handle, e)}
+                          />
+                        ))}
                       </>
                     )}
                   </g>
                 );
               })}
+
+            {/* 对齐辅助线 */}
+            {alignGuides.map((g, i) =>
+              g.axis === 'x' ? (
+                <line
+                  key={`ag-${i}`}
+                  x1={CANVAS_PADDING + g.pos * PX_PER_MM}
+                  y1={0}
+                  x2={CANVAS_PADDING + g.pos * PX_PER_MM}
+                  y2={canvasH + CANVAS_PADDING * 2}
+                  stroke="#3b82f6"
+                  strokeWidth={1}
+                  strokeDasharray="3,3"
+                  pointerEvents="none"
+                />
+              ) : (
+                <line
+                  key={`ag-${i}`}
+                  x1={0}
+                  y1={CANVAS_PADDING + g.pos * PX_PER_MM}
+                  x2={canvasW + CANVAS_PADDING * 2}
+                  y2={CANVAS_PADDING + g.pos * PX_PER_MM}
+                  stroke="#3b82f6"
+                  strokeWidth={1}
+                  strokeDasharray="3,3"
+                  pointerEvents="none"
+                />
+              ),
+            )}
           </svg>
         </div>
       </div>
@@ -445,6 +701,17 @@ export const TemplateCanvas: React.FC = () => {
       <div className="tpl-canvas__info">
         {tpl.name} — {tpl.widthMm} x {tpl.heightMm} mm — {tpl.elements.length} 元素
       </div>
+
+      {/* 右键菜单 */}
+      {ctxMenu && (
+        <ContextMenu
+          items={ctxMenuItems}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onSelect={handleCtxMenuSelect}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   );
 };

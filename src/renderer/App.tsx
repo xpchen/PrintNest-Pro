@@ -12,6 +12,7 @@ import { AppTopBar } from './components/shell/AppTopBar';
 import { EditorModePlaceholder } from './components/shell/EditorModePlaceholder';
 import { OutputCenter } from './components/output/OutputCenter';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { ToastContainer } from './components/Toast';
 import { TemplateWorkspace } from './components/template/TemplateWorkspace';
 import { LeftDock } from './components/shell/LeftDock';
 import { RightDock } from './components/shell/RightDock';
@@ -21,6 +22,7 @@ import { useAppCommandListener } from './hooks/useAppCommandListener';
 import { useHistoryShortcuts } from './hooks/useHistoryShortcuts';
 import { useProjectAutoSave } from './hooks/useProjectAutoSave';
 import { useUiShellPersistence } from './hooks/useUiShellPersistence';
+import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 
 export const App: React.FC = () => {
   const uiPhase = useAppStore((s) => s.uiPhase);
@@ -36,9 +38,15 @@ export const App: React.FC = () => {
   useHistoryShortcuts();
   useProjectAutoSave();
   useUiShellPersistence(currentProjectId, uiPhase);
+  useGlobalKeyboard();
 
   if (uiPhase === 'home') {
-    return <ProjectHome onEnteredEditor={() => undefined} />;
+    return (
+      <>
+        <ProjectHome onEnteredEditor={() => undefined} />
+        <ToastContainer />
+      </>
+    );
   }
 
   return (
@@ -74,6 +82,7 @@ export const App: React.FC = () => {
         </div>
         {statusBarVisible && <StatusBar />}
         <ConfirmDialog />
+        <ToastContainer />
       </div>
     </EditorChromeProvider>
   );

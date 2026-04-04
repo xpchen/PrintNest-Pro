@@ -215,6 +215,8 @@ export interface TemplateSlice {
   updateElement: (templateId: string, elementId: string, patch: Partial<TemplateElement>) => void;
   removeElement: (templateId: string, elementId: string) => void;
   reorderElements: (templateId: string, orderedIds: string[]) => void;
+  copySelectedElements: () => void;
+  pasteElements: () => void;
 
   /** 批量实例化：对所有模板 × dataRecords 调用引擎（底层能力，不暴露 UI 入口） */
   instantiateAll: () => void;

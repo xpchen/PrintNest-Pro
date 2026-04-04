@@ -146,6 +146,23 @@ export const Inspector: React.FC = () => {
         )}
       </div>
 
+      {/* 模板来源信息 */}
+      {relatedItem?.metadata && (
+        <div className="inspector-section">
+          <div className="inspector-section-title">模板来源</div>
+          <div className="inspector-row">
+            <span className="inspector-label" style={{ width: 50 }}>模板</span>
+            <span style={{ fontSize: 13 }}>{relatedItem.metadata.templateName}</span>
+          </div>
+          {relatedItem.metadata.keyFields.map((kf) => (
+            <div className="inspector-row" key={kf.label}>
+              <span className="inspector-label" style={{ width: 50 }}>{kf.label}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{kf.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Position - editable */}
       <div className="inspector-section">
         <div className="inspector-section-title">位置</div>

@@ -1,11 +1,6 @@
-let toastTimer: ReturnType<typeof setTimeout>;
-
-export function showToast(msg: string) {
-  document.querySelectorAll('.toast').forEach((t) => t.remove());
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.remove(), 2000);
-}
+/**
+ * 全局 toast — 代理到 React Toast 组件
+ *
+ * 向后兼容：showToast(msg) 签名不变
+ */
+export { showToast } from '../components/Toast';

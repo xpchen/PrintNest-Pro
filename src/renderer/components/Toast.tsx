@@ -1,0 +1,62 @@
+/**
+ * Toast 通知组件 — React Portal，右下角堆叠
+ *
+ * 向后兼容：showToast(msg) 签名不变
+ */
+import React, { useEffect, useState, useCallback } from 'react';
+import ReactDOM from 'react-dom';
+
+type ToastLevel = 'info' | 'success' | 'warning' | 'error';
+
+interface ToastItem {
+  id: number;
+  message: string;
+  level: ToastLevel;
+}
+
+let nextId = 0;
+let addToastFn: ((msg: string, level?: ToastLevel) => void) | null = null;
+
+/** 全局调用入口（向后兼容） */
+export function showToast(msg: string, level?: ToastLevel): void {
+  addToastFn?.(msg, level);
+}
+
+export const ToastContainer: React.FC = () => {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const addToast = useCallback((message: string, level: ToastLevel = 'info') => {
+    const id = nextId++;
+    setToasts((prev) => [...prev, { id, message, level }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    addToastFn = addToast;
+    return () => {
+      addToastFn = null;
+    };
+  }, [addToast]);
+
+  const dismiss = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  if (toasts.length === 0) return null;
+
+  return ReactDOM.createPortal(
+    <div className="toast-stack">
+      {toasts.map((t) => (
+        <div key={t.id} className={`toast toast--${t.level}`} role="alert">
+          <span className="toast__message">{t.message}</span>
+          <button className="toast__close" onClick={() => dismiss(t.id)} aria-label="关闭">
+            ×
+          </button>
+        </div>
+      ))}
+    </div>,
+    document.body,
+  );
+};

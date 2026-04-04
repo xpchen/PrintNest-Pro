@@ -5,6 +5,7 @@ import { buildLayoutSignature } from '../../../shared/layoutSignature';
 import { applyManualEditPatch } from '../../../shared/persistence/manualEditRuntime';
 import { instancesToPrintItems } from '../../../shared/template/instanceToLayoutAdapter';
 import { log } from '../../../shared/logger';
+import type { PreRenderInput } from '../../utils/templatePreviewRenderer';
 import type { AppState, LayoutJobSlice } from '../types';
 
 function findPlacementGlobal(s: AppState, placementId: string): Placement | undefined {
@@ -341,13 +342,13 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
     }
   },
 
-  runAutoLayoutFromInstances: () => {
+  runAutoLayoutFromInstances: async () => {
     const s = get();
     // 过滤掉 error 状态的实例
     const readyInstances = s.templateInstances.filter((i) => i.status !== 'error');
     if (readyInstances.length === 0) {
       log.engine.warn('runAutoLayoutFromInstances: no ready instances');
-      return Promise.resolve();
+      return;
     }
 
     const printItems = instancesToPrintItems(readyInstances, s.dataRecords, {
@@ -357,8 +358,46 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
       templates: s.templates,
     });
 
-    // 将实例生成的 items 设为当前 items，然后跑 runAutoLayout
+    // 先设 items（metadata 可读回退立即生效），再异步预渲染
     set({ items: printItems });
+
+    // 预渲染模板实例位图（动态导入避免测试环境加载 OffscreenCanvas）
+    const { batchPreRenderInstances, bumpRenderGeneration } = await import('../../utils/templatePreviewRenderer');
+    const { fetchAssetMap } = await import('../../hooks/useAssetMap');
+    bumpRenderGeneration();
+    const tplMap = new Map(s.templates.map((t) => [t.id, t]));
+    const recordMap = new Map(s.dataRecords.map((r) => [r.id, r]));
+    const preRenderInputs: PreRenderInput[] = [];
+    for (const inst of readyInstances) {
+      const template = tplMap.get(inst.templateId);
+      if (!template) continue;
+      preRenderInputs.push({
+        instance: inst,
+        template,
+        record: recordMap.get(inst.recordId),
+      });
+    }
+
+    if (preRenderInputs.length > 0) {
+      try {
+        const assetMap = await fetchAssetMap(s.currentProjectId);
+        const blobUrls = await batchPreRenderInstances(preRenderInputs, assetMap);
+
+        // 将 blobUrl 写入对应 PrintItem 的 imageSrc
+        if (blobUrls.size > 0) {
+          const updatedItems = get().items.map((item) => {
+            const instanceId = item.metadata?.sourceInstanceId;
+            if (instanceId && blobUrls.has(instanceId)) {
+              return { ...item, imageSrc: blobUrls.get(instanceId)! };
+            }
+            return item;
+          });
+          set({ items: updatedItems });
+        }
+      } catch (err) {
+        log.engine.warn('pre-render failed, metadata fallback active', { error: String(err) });
+      }
+    }
 
     // 使用现有 runAutoLayout 流程
     return get().runAutoLayout();
