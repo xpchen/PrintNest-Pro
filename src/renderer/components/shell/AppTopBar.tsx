@@ -33,7 +33,6 @@ export const AppTopBar: React.FC = () => {
     handleImportExcel,
     handleExportPng,
     handleExportPdf,
-    requestExportHistoricalPdf,
     handleLayout,
     isComputing,
   } = useEditorChrome();
@@ -131,7 +130,7 @@ export const AppTopBar: React.FC = () => {
                   handleExportPng();
                 }}
               >
-                导出 PNG（当前画布）
+                导出 PNG
               </button>
               <button
                 type="button"
@@ -141,27 +140,7 @@ export const AppTopBar: React.FC = () => {
                   void handleExportPdf();
                 }}
               >
-                导出 PDF（当前排版）
-              </button>
-              <button
-                type="button"
-                className="shell-dropdown__item"
-                onClick={() => {
-                  closeExport();
-                  useAppStore.getState().requestExportCurrentPdf();
-                }}
-              >
-                PDF（当前 Run · 与菜单一致）
-              </button>
-              <button
-                type="button"
-                className="shell-dropdown__item"
-                onClick={() => {
-                  closeExport();
-                  requestExportHistoricalPdf();
-                }}
-              >
-                PDF（最近落库 Run）
+                导出 PDF
               </button>
             </div>
           )}

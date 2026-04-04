@@ -1,5 +1,7 @@
 /**
- * 输出中心 — 导出预设、预飞检查、画布缩略图、导出历史
+ * 输出中心 — 导出前检查、画布缩略图、导出历史
+ *
+ * Phase 1.1-C 瘦身：隐藏导出预设面板、历史排版默认折叠、中央聚焦导出按钮
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
@@ -34,8 +36,9 @@ function genId(): string {
   return crypto.randomUUID();
 }
 
-/* ── 导出预设面板 ── */
-const ExportPresetPanel: React.FC<{
+/* ── 导出预设面板（保留组件代码，暂时不渲染） ── */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _ExportPresetPanel: React.FC<{
   profiles: ExportProfile[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -97,10 +100,10 @@ const CanvasThumbnails: React.FC = () => {
   );
 };
 
-/* ── 导出历史面板 ── */
+/* ── 导出记录面板 ── */
 const ExportHistoryPanel: React.FC<{ entries: ExportHistoryEntry[] }> = ({ entries }) => (
   <div className="oc-history">
-    <div className="oc-history__title">导出历史</div>
+    <div className="oc-history__title">导出记录</div>
     {entries.length === 0 ? (
       <div className="oc-history__empty">暂无导出记录</div>
     ) : (
@@ -123,7 +126,7 @@ const ExportHistoryPanel: React.FC<{ entries: ExportHistoryEntry[] }> = ({ entri
   </div>
 );
 
-/* ── 历史排版 Run 列表 ── */
+/* ── 历史排版 Run 列表（默认折叠） ── */
 interface LayoutRunRow {
   id: string;
   created_at: string;
@@ -138,37 +141,51 @@ const HistoryRunPanel: React.FC<{
   runs: LayoutRunRow[];
   selectedRunId: string | null;
   onSelect: (id: string | null) => void;
-}> = ({ runs, selectedRunId, onSelect }) => (
-  <div className="oc-runs">
-    <div className="oc-runs__title">历史排版</div>
-    {runs.length === 0 ? (
-      <div className="oc-runs__empty">暂无历史排版</div>
-    ) : (
-      <ul className="oc-runs__list">
-        <li
-          className={`oc-runs__item ${selectedRunId === null ? 'oc-runs__item--active' : ''}`}
-          onClick={() => onSelect(null)}
-        >
-          <span className="oc-runs__item-label">当前结果</span>
-        </li>
-        {runs.map((r) => (
-          <li
-            key={r.id}
-            className={`oc-runs__item ${selectedRunId === r.id ? 'oc-runs__item--active' : ''}`}
-            onClick={() => onSelect(r.id)}
-          >
-            <span className="oc-runs__item-time">
-              {new Date(r.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-            </span>
-            <span className="oc-runs__item-stats">
-              {r.canvas_count}版 · {r.placement_count ?? '?'}件 · {Math.round(r.utilization)}%
-            </span>
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
-);
+}> = ({ runs, selectedRunId, onSelect }) => {
+  const [collapsed, setCollapsed] = useState(true);
+
+  return (
+    <div className="oc-runs">
+      <button
+        type="button"
+        className="oc-runs__title oc-runs__title--collapsible"
+        onClick={() => setCollapsed((v) => !v)}
+      >
+        历史排版记录 {collapsed ? '▸' : '▾'} {runs.length > 0 && `(${runs.length})`}
+      </button>
+      {!collapsed && (
+        <>
+          {runs.length === 0 ? (
+            <div className="oc-runs__empty">暂无历史排版</div>
+          ) : (
+            <ul className="oc-runs__list">
+              <li
+                className={`oc-runs__item ${selectedRunId === null ? 'oc-runs__item--active' : ''}`}
+                onClick={() => onSelect(null)}
+              >
+                <span className="oc-runs__item-label">当前结果</span>
+              </li>
+              {runs.map((r) => (
+                <li
+                  key={r.id}
+                  className={`oc-runs__item ${selectedRunId === r.id ? 'oc-runs__item--active' : ''}`}
+                  onClick={() => onSelect(r.id)}
+                >
+                  <span className="oc-runs__item-time">
+                    {new Date(r.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <span className="oc-runs__item-stats">
+                    {r.canvas_count}版 · {r.placement_count ?? '?'}件 · {Math.round(r.utilization)}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 /* ── OutputCenter 主组件 ── */
 export const OutputCenter: React.FC = () => {
@@ -176,8 +193,6 @@ export const OutputCenter: React.FC = () => {
   const result = useAppStore((s) => s.result);
   const config = useAppStore((s) => s.config);
 
-  const [profiles, setProfiles] = useState<ExportProfile[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [history, setHistory] = useState<ExportHistoryEntry[]>([]);
   const [runs, setRuns] = useState<LayoutRunRow[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -185,51 +200,12 @@ export const OutputCenter: React.FC = () => {
 
   const api = window.electronAPI;
 
-  // 加载预设、历史和排版 run 列表
+  // 加载历史和排版 run 列表
   useEffect(() => {
     if (!currentProjectId || !api) return;
-    api.listExportProfiles?.(currentProjectId).then((ps) => {
-      const typed = ps as ExportProfile[];
-      setProfiles(typed);
-      if (typed.length > 0 && !selectedProfileId) setSelectedProfileId(typed[0].id);
-    });
     api.listExportHistory?.(currentProjectId, 20).then((hs) => setHistory(hs as ExportHistoryEntry[]));
     api.listLayoutRuns?.(currentProjectId).then((rs) => setRuns((rs as LayoutRunRow[]) ?? []));
   }, [currentProjectId]);
-
-  const handleAddProfile = useCallback(async () => {
-    if (!currentProjectId || !api?.saveExportProfile) return;
-    const p: ExportProfile = {
-      id: genId(),
-      name: `预设 ${profiles.length + 1}`,
-      mode: 'production',
-      includeCropMarks: true,
-      includeBleed: true,
-      safeMarginMm: 0,
-      outputFormat: 'pdf',
-      namingPattern: null,
-      createdAt: new Date().toISOString(),
-    };
-    await api.saveExportProfile(currentProjectId, p);
-    setProfiles((prev) => [p, ...prev]);
-    setSelectedProfileId(p.id);
-  }, [currentProjectId, profiles.length, api]);
-
-  const showConfirm = useAppStore((s) => s.showConfirm);
-
-  const handleDeleteProfile = useCallback(async (id: string) => {
-    if (!currentProjectId || !api?.deleteExportProfile) return;
-    const confirmed = await showConfirm({
-      title: '删除导出预设',
-      message: '确定要删除该导出预设吗？',
-      confirmLabel: '删除',
-      danger: true,
-    });
-    if (!confirmed) return;
-    await api.deleteExportProfile(currentProjectId, id);
-    setProfiles((prev) => prev.filter((p) => p.id !== id));
-    if (selectedProfileId === id) setSelectedProfileId(null);
-  }, [currentProjectId, selectedProfileId, api, showConfirm]);
 
   const handleExportAll = useCallback(async () => {
     if (!api) return;
@@ -251,7 +227,7 @@ export const OutputCenter: React.FC = () => {
         });
         if (currentProjectId && api.recordExportHistory) {
           const entry: ExportHistoryEntry = {
-            id: genId(), profileId: selectedProfileId, runId: selectedRunId,
+            id: genId(), profileId: null, runId: selectedRunId,
             outputPath: outPath, format: 'pdf', createdAt: new Date().toISOString(),
             fileSizeBytes: null, canvasCount: restored.result.canvases.length,
             status: res.success ? 'success' : 'failed',
@@ -280,7 +256,7 @@ export const OutputCenter: React.FC = () => {
 
       if (currentProjectId && api.recordExportHistory) {
         const entry: ExportHistoryEntry = {
-          id: genId(), profileId: selectedProfileId, runId: null,
+          id: genId(), profileId: null, runId: null,
           outputPath: outPath, format: 'pdf', createdAt: new Date().toISOString(),
           fileSizeBytes: null, canvasCount: result.canvases.length,
           status: res.success ? 'success' : 'failed',
@@ -291,24 +267,17 @@ export const OutputCenter: React.FC = () => {
     } finally {
       setExporting(false);
     }
-  }, [api, result, config, currentProjectId, selectedProfileId, selectedRunId]);
+  }, [api, result, config, currentProjectId, selectedRunId]);
 
   return (
     <div className="output-center">
       <div className="output-center__left">
-        <ExportPresetPanel
-          profiles={profiles}
-          selectedId={selectedProfileId}
-          onSelect={setSelectedProfileId}
-          onAdd={handleAddProfile}
-          onDelete={handleDeleteProfile}
-        />
+        <PreflightChecklist />
         <HistoryRunPanel
           runs={runs}
           selectedRunId={selectedRunId}
           onSelect={setSelectedRunId}
         />
-        <PreflightChecklist />
       </div>
       <div className="output-center__center">
         <CanvasThumbnails />
@@ -318,7 +287,7 @@ export const OutputCenter: React.FC = () => {
             disabled={exporting || (!selectedRunId && (!result || result.canvases.length === 0))}
             onClick={handleExportAll}
           >
-            {exporting ? '导出中…' : selectedRunId ? '导出历史排版 PDF' : '导出全部 PDF'}
+            {exporting ? '导出中…' : '导出 PDF'}
           </button>
         </div>
       </div>

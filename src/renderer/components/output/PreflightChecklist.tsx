@@ -82,7 +82,7 @@ export const PreflightChecklist: React.FC = () => {
   return (
     <div className="preflight">
       <div className="preflight__header">
-        <span className="preflight__title">预飞检查</span>
+        <span className="preflight__title">导出前检查</span>
         <span className={`preflight__badge ${allOk ? 'preflight__badge--ok' : 'preflight__badge--warn'}`}>
           {allOk ? 'READY' : 'CHECK'}
         </span>
