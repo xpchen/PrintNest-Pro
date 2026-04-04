@@ -205,14 +205,18 @@ function listProjectSummaries(): ProjectListSummary[] {
 }
 
 /** 保存项目：写入 project.db（权威）+ project.json（阶段 1 保险快照） */
-function saveProject(projectId: string, data: object): void {
+function saveProject(projectId: string, data: object): boolean {
   ensureProjectLayout(projectId);
   const state = payloadToEditorState(projectId, data);
   if (!state.config) {
     log.project.warn('skip save: missing config', { projectId });
-    return;
+    return false;
   }
-  saveEditorState(projectId, state, { jsonSnapshot: true });
+  const ok = saveEditorState(projectId, state, { jsonSnapshot: true });
+  if (!ok) {
+    log.project.error('saveProject: saveEditorState returned failure', { projectId });
+  }
+  return ok;
 }
 
 /** 加载项目：优先 DB，必要时从 project.json 迁移并合并预览图 */
@@ -346,8 +350,7 @@ export function registerFileManagerIPC(): void {
 
   // 保存项目
   ipcMain.handle('file:saveProject', async (_event, projectId: string, data: object) => {
-    saveProject(projectId, data);
-    return true;
+    return saveProject(projectId, data);
   });
 
   // 加载项目
@@ -358,8 +361,7 @@ export function registerFileManagerIPC(): void {
 
   // 自动保存：DB 权威 + JSON 保险快照（渲染进程防抖后调用）
   ipcMain.handle('file:autoSaveProject', async (_event, projectId: string, data: object) => {
-    saveProject(projectId, data);
-    return true;
+    return saveProject(projectId, data);
   });
 
   // 列出项目

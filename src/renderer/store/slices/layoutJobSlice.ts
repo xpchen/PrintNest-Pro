@@ -130,6 +130,20 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
   },
 
   batchLock: (ids, locked) => {
+    // 记录变更前的状态
+    const beforeStates = new Map<string, boolean>();
+    const s0 = get();
+    if (s0.result) {
+      const idSet = new Set(ids);
+      for (const c of s0.result.canvases) {
+        for (const p of c.placements) {
+          if (idSet.has(p.id) && p.locked !== locked) {
+            beforeStates.set(p.id, p.locked);
+          }
+        }
+      }
+    }
+
     set((s) => {
       if (!s.result) return s;
       const idSet = new Set(ids);
@@ -139,6 +153,17 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
       }));
       return { result: { ...s.result, canvases: newCanvases } };
     });
+
+    // 为每个实际变更的 placement 记录 manualEdit
+    for (const [pid, prevLocked] of beforeStates) {
+      get().appendManualEdit({
+        sourceRunId: get().lastLayoutRunId,
+        placementId: pid,
+        op: 'lock',
+        before: { locked: prevLocked },
+        after: { locked },
+      });
+    }
   },
 
   deleteSelected: () => {

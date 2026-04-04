@@ -5,6 +5,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { showToast } from '../components/Toast';
 
 export function useProjectAutoSave(): void {
   const saveTimerRef = useRef<number | undefined>(undefined);
@@ -40,6 +41,7 @@ export function useProjectAutoSave(): void {
         useAppStore.getState().setSaveStatus('saved');
       } catch (err) {
         useAppStore.getState().setSaveStatus('error');
+        showToast('自动保存失败，请手动保存', 'error');
         window.electronAPI?.logError?.('auto-save failed', String(err));
       }
     };

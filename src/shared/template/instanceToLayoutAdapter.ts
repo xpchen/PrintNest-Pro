@@ -27,6 +27,33 @@ const COLORS = [
 ];
 
 /**
+ * 候选名称字段：中文常见 + 英文常见。
+ * 动态匹配，避免对特定数据 schema 的硬编码假设。
+ */
+const NAME_CANDIDATE_KEYS = [
+  'name', 'sku', 'id', 'code', 'title',
+  '内部单号', '名称', '品名', '编号', 'SKU',
+];
+
+/**
+ * 关键字段展示优先级：先匹配这些 key，再按数据顺序补齐。
+ */
+const KEY_PRIORITY_KEYS = [
+  'name', 'sku', 'id', 'title', 'code',
+  '内部单号', '品名', '规格', '名称', '编号',
+];
+
+/** 从 record.fields 中按候选 key 列表取第一个非空值 */
+function pickFirstFieldValue(record: DataRecord | undefined, keys: string[]): string | undefined {
+  if (!record) return undefined;
+  for (const k of keys) {
+    const v = record.fields[k];
+    if (v) return v;
+  }
+  return undefined;
+}
+
+/**
  * 将 ready 的模板实例转为 PrintItem[]。
  * 每个实例按对应 DataRecord 的 qty 设定 quantity。
  */
@@ -42,18 +69,16 @@ export function instancesToPrintItems(
     const record = recordMap.get(inst.recordId);
     const tpl = tplMap.get(inst.templateId);
     const qty = record?.qty ?? 1;
-    const name =
-      (record?.fields?.['内部单号'] ??
-        record?.fields?.['name'] ??
-        record?.fields?.['sku'] ??
-        `实例 ${idx + 1}`);
+    // 动态提取名称：优先使用第一个非空字段值，不再依赖硬编码字段名
+    const name = pickFirstFieldValue(record, NAME_CANDIDATE_KEYS) ?? `实例 ${idx + 1}`;
 
-    // 提取关键字段（最多 3 个）
+    // 提取关键字段（最多 3 个）：优先级键 + 其余字段
     const keyFields: PrintItemMetadata['keyFields'] = [];
     if (record) {
-      const priorityKeys = ['内部单号', 'name', 'sku', '品名', '规格'];
       const allKeys = Object.keys(record.fields);
-      const ordered = [...priorityKeys.filter((k) => allKeys.includes(k)), ...allKeys.filter((k) => !priorityKeys.includes(k))];
+      const priorityHits = KEY_PRIORITY_KEYS.filter((k) => allKeys.includes(k));
+      const rest = allKeys.filter((k) => !KEY_PRIORITY_KEYS.includes(k));
+      const ordered = [...priorityHits, ...rest];
       for (const k of ordered.slice(0, 3)) {
         const v = record.fields[k];
         if (v) keyFields.push({ label: k, value: v });

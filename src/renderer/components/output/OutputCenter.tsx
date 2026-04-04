@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { PreflightChecklist } from './PreflightChecklist';
+import { log } from '../../../shared/logger';
 
 /* ── 类型 ── */
 interface ExportProfile {
@@ -203,8 +204,12 @@ export const OutputCenter: React.FC = () => {
   // 加载历史和排版 run 列表
   useEffect(() => {
     if (!currentProjectId || !api) return;
-    api.listExportHistory?.(currentProjectId, 20).then((hs) => setHistory(hs as ExportHistoryEntry[]));
-    api.listLayoutRuns?.(currentProjectId).then((rs) => setRuns((rs as LayoutRunRow[]) ?? []));
+    api.listExportHistory?.(currentProjectId, 20)
+      .then((hs) => setHistory(hs as ExportHistoryEntry[]))
+      .catch((err) => log.export.warn('failed to load export history', { err }));
+    api.listLayoutRuns?.(currentProjectId)
+      .then((rs) => setRuns((rs as LayoutRunRow[]) ?? []))
+      .catch((err) => log.export.warn('failed to load layout runs', { err }));
   }, [currentProjectId]);
 
   const handleExportAll = useCallback(async () => {
