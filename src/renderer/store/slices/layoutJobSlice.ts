@@ -390,9 +390,10 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
 
           // 分批渲染并逐批更新 items，每批 50 个
           const BATCH = 50;
+          const allBase64: { id: string; base64: string }[] = [];
           for (let i = 0; i < preRenderInputs.length; i += BATCH) {
             const chunk = preRenderInputs.slice(i, i + BATCH);
-            const blobUrls = await batchPreRenderInstances(chunk, assetMap);
+            const { blobUrls, base64Map } = await batchPreRenderInstances(chunk, assetMap);
 
             if (blobUrls.size > 0) {
               const updatedItems = get().items.map((item) => {
@@ -404,9 +405,24 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
               });
               set({ items: updatedItems });
             }
+            // 收集 base64 用于磁盘缓存
+            for (const [id, b64] of base64Map) {
+              allBase64.push({ id, base64: b64 });
+            }
             log.engine.info('pre-render progress', { done: Math.min(i + BATCH, preRenderInputs.length), total: preRenderInputs.length });
           }
           showToast(`${preRenderInputs.length} 个模板预览图生成完毕`, 'success');
+
+          // 后台保存 PNG 到磁盘（下次打开项目可直接读取）
+          const api = window.electronAPI;
+          if (api?.savePreviewSnapshots && allBase64.length > 0) {
+            const SAVE_BATCH = 100;
+            for (let i = 0; i < allBase64.length; i += SAVE_BATCH) {
+              const chunk = allBase64.slice(i, i + SAVE_BATCH);
+              await api.savePreviewSnapshots(s.currentProjectId, chunk);
+            }
+            log.engine.info('preview snapshots saved to disk', { count: allBase64.length });
+          }
         } catch (err) {
           log.engine.warn('pre-render failed, metadata fallback active', { error: String(err) });
           const { showToast: toast } = await import('../../utils/toast');

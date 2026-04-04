@@ -84,6 +84,11 @@ declare global {
     deleteExportProfile?: (projectId: string, profileId: string) => Promise<boolean>;
     listExportHistory?: (projectId: string, limit?: number) => Promise<unknown[]>;
     recordExportHistory?: (projectId: string, entry: object) => Promise<boolean>;
+    // 预览快照缓存
+    savePreviewSnapshots?: (projectId: string, previews: { id: string; base64: string }[]) => Promise<number>;
+    loadPreviewSnapshots?: (projectId: string, instanceIds: string[]) => Promise<Record<string, string>>;
+    clearPreviewSnapshots?: (projectId: string) => Promise<number>;
+
     logError?: (...args: unknown[]) => Promise<void>;
     logWarn?: (...args: unknown[]) => Promise<void>;
   }

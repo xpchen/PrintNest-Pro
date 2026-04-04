@@ -38,6 +38,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mapTableToImportRows: (table: object, config: object) =>
     ipcRenderer.invoke('file:mapTableToImportRows', table, config),
 
+  // 预览快照缓存
+  savePreviewSnapshots: (projectId: string, previews: { id: string; base64: string }[]) =>
+    ipcRenderer.invoke('snapshot:savePreviews', projectId, previews),
+  loadPreviewSnapshots: (projectId: string, instanceIds: string[]) =>
+    ipcRenderer.invoke('snapshot:loadPreviews', projectId, instanceIds),
+  clearPreviewSnapshots: (projectId: string) =>
+    ipcRenderer.invoke('snapshot:clearPreviews', projectId),
+
   // PDF 导出
   exportPdf: (options: object) =>
     ipcRenderer.invoke('pdf:export', options),

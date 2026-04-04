@@ -394,6 +394,55 @@ export function registerFileManagerIPC(): void {
     return readAssetThumbnailBase64(projectId, assetId);
   });
 
+  // ── 预览快照缓存 ──
+
+  // 批量保存预览 PNG 到 snapshots 目录
+  ipcMain.handle('snapshot:savePreviews', async (_event, projectId: string, previews: { id: string; base64: string }[]) => {
+    const dir = path.join(getProjectDirectory(projectId), 'snapshots');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    let saved = 0;
+    for (const p of previews) {
+      try {
+        const buf = Buffer.from(p.base64, 'base64');
+        fs.writeFileSync(path.join(dir, `${p.id}.png`), buf);
+        saved++;
+      } catch {
+        // 跳过写入失败的单个文件
+      }
+    }
+    return saved;
+  });
+
+  // 批量加载预览 PNG（返回 instanceId → data:image/png;base64,... 映射）
+  ipcMain.handle('snapshot:loadPreviews', async (_event, projectId: string, instanceIds: string[]) => {
+    const dir = path.join(getProjectDirectory(projectId), 'snapshots');
+    const result: Record<string, string> = {};
+    if (!fs.existsSync(dir)) return result;
+    for (const id of instanceIds) {
+      const filePath = path.join(dir, `${id}.png`);
+      try {
+        if (fs.existsSync(filePath)) {
+          const buf = fs.readFileSync(filePath);
+          result[id] = `data:image/png;base64,${buf.toString('base64')}`;
+        }
+      } catch {
+        // 跳过读取失败的
+      }
+    }
+    return result;
+  });
+
+  // 清空预览缓存
+  ipcMain.handle('snapshot:clearPreviews', async (_event, projectId: string) => {
+    const dir = path.join(getProjectDirectory(projectId), 'snapshots');
+    if (!fs.existsSync(dir)) return 0;
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.png'));
+    for (const f of files) {
+      try { fs.unlinkSync(path.join(dir, f)); } catch { /* ignore */ }
+    }
+    return files.length;
+  });
+
   // 读取文件为 base64（用于渲染器显示本地图片）
   ipcMain.handle('file:readAsBase64', async (_event, filePath: string) => {
     if (!fs.existsSync(filePath)) return null;

@@ -17,9 +17,17 @@ interface ToastItem {
 let nextId = 0;
 let addToastFn: ((msg: string, level?: ToastLevel) => void) | null = null;
 
+/** 等待容器就绪前的缓冲队列 */
+const pendingQueue: { msg: string; level?: ToastLevel }[] = [];
+
 /** 全局调用入口（向后兼容） */
 export function showToast(msg: string, level?: ToastLevel): void {
-  addToastFn?.(msg, level);
+  if (addToastFn) {
+    addToastFn(msg, level);
+  } else {
+    // 容器尚未挂载，缓冲消息
+    pendingQueue.push({ msg, level });
+  }
 }
 
 export const ToastContainer: React.FC = () => {
@@ -35,6 +43,11 @@ export const ToastContainer: React.FC = () => {
 
   useEffect(() => {
     addToastFn = addToast;
+    // 刷新挂载前缓冲的消息
+    while (pendingQueue.length > 0) {
+      const item = pendingQueue.shift()!;
+      addToast(item.msg, item.level);
+    }
     return () => {
       addToastFn = null;
     };

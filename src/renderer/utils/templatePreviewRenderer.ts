@@ -213,6 +213,17 @@ async function drawDrawables(
   return canvas.convertToBlob({ type: 'image/png' });
 }
 
+/**
+ * Blob → base64 字符串（不含 data: 前缀）
+ */
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
 
 /* ================================================================ */
 /*  批量渲染                                                         */
@@ -224,16 +235,25 @@ export interface PreRenderInput {
   record?: DataRecord;
 }
 
+/** 批量渲染结果 */
+export interface BatchRenderResult {
+  /** instanceId → blob URL（内存中即时显示） */
+  blobUrls: Map<string, string>;
+  /** instanceId → base64 PNG（可持久化到磁盘） */
+  base64Map: Map<string, string>;
+}
+
 /**
  * 批量渲染模板实例预览图。
- * 返回 Map<instanceId, blobUrl>。
+ * 返回 blob URL（用于即时显示）和 base64（用于磁盘缓存）。
  * 已有有效缓存的实例会跳过渲染。
  */
 export async function batchPreRenderInstances(
   inputs: PreRenderInput[],
   assetMap: Map<string, AssetEntry>,
-): Promise<Map<string, string>> {
-  const result = new Map<string, string>();
+): Promise<BatchRenderResult> {
+  const blobUrls = new Map<string, string>();
+  const base64Map = new Map<string, string>();
   const gen = currentGeneration;
 
   const toRender: PreRenderInput[] = [];
@@ -241,7 +261,7 @@ export async function batchPreRenderInstances(
   for (const input of inputs) {
     const cached = cache.get(input.instance.id);
     if (cached && cached.generation === gen) {
-      result.set(input.instance.id, cached.blobUrl);
+      blobUrls.set(input.instance.id, cached.blobUrl);
     } else {
       // 清除过期缓存
       if (cached) {
@@ -275,11 +295,18 @@ export async function batchPreRenderInstances(
       if (blob) {
         const url = URL.createObjectURL(blob);
         cache.set(input.instance.id, { generation: gen, blobUrl: url });
-        result.set(input.instance.id, url);
+        blobUrls.set(input.instance.id, url);
+        // 同时转 base64 用于磁盘缓存
+        try {
+          const b64 = await blobToBase64(blob);
+          base64Map.set(input.instance.id, b64);
+        } catch {
+          // base64 转换失败不影响 blob URL
+        }
       }
     });
     await Promise.all(promises);
   }
 
-  return result;
+  return { blobUrls, base64Map };
 }
