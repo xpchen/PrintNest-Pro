@@ -1231,6 +1231,15 @@ body {
   font-size: 14px;
 }
 .tpl-instance-panel__close:hover { color: var(--text-primary); }
+.tpl-instance-panel__btn {
+  padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px;
+  background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 11px;
+}
+.tpl-instance-panel__btn:hover:not(:disabled) { background: var(--surface-hover); }
+.tpl-instance-panel__btn--danger { color: var(--color-danger, #ef4444); border-color: var(--color-danger, #ef4444); }
+.tpl-instance-panel__btn--danger:hover:not(:disabled) { background: rgba(239,68,68,.15); }
+.tpl-instance-panel__btn:disabled { opacity: 0.4; cursor: default; }
+.tpl-action-bar__total { color: var(--text-secondary); }
 .tpl-instance-panel__list { padding: 6px 12px; display: flex; flex-direction: column; gap: 4px; }
 
 /* Instance Card */

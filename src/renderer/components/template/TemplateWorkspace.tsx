@@ -16,6 +16,9 @@ export const TemplateWorkspace: React.FC = () => {
   const currentTemplateId = useAppStore((s) => s.currentTemplateId);
   const runAutoLayoutFromInstances = useAppStore((s) => s.runAutoLayoutFromInstances);
   const setEditorWorkMode = useAppStore((s) => s.setEditorWorkMode);
+  const clearAllInstances = useAppStore((s) => s.clearAllInstances);
+  const clearCurrentTemplateInstances = useAppStore((s) => s.clearCurrentTemplateInstances);
+  const showConfirm = useAppStore((s) => s.showConfirm);
 
   const [showInstances, setShowInstances] = useState(false);
   const [instantiating, setInstantiating] = useState(false);
@@ -52,6 +55,29 @@ export const TemplateWorkspace: React.FC = () => {
 
   const canInstantiate = currentTemplateId != null && dataRecords.length > 0;
 
+  const handleClearCurrent = useCallback(async () => {
+    const confirmed = await showConfirm({
+      title: '清空当前模板实例',
+      message: `确定要清空当前模板的 ${currentInstances.length} 个实例吗？`,
+      confirmLabel: '清空',
+      danger: true,
+    });
+    if (confirmed) clearCurrentTemplateInstances();
+  }, [showConfirm, clearCurrentTemplateInstances, currentInstances.length]);
+
+  const handleClearAll = useCallback(async () => {
+    const confirmed = await showConfirm({
+      title: '清空全部实例',
+      message: `确定要清空所有模板的 ${templateInstances.length} 个实例吗？`,
+      confirmLabel: '全部清空',
+      danger: true,
+    });
+    if (confirmed) {
+      clearAllInstances();
+      setShowInstances(false);
+    }
+  }, [showConfirm, clearAllInstances, templateInstances.length]);
+
   return (
     <div className="tpl-workspace">
       <aside className="tpl-workspace__left">
@@ -70,9 +96,12 @@ export const TemplateWorkspace: React.FC = () => {
             )}
             {templateInstances.length > 0 && (
               <span className="tpl-action-bar__stats">
-                实例: {readyCount} 就绪
+                当前模板: {readyCount} 就绪
                 {warnCount > 0 && <span className="tpl-action-bar__warn"> / {warnCount} 警告</span>}
                 {errorCount > 0 && <span className="tpl-action-bar__error"> / {errorCount} 错误</span>}
+                {templateInstances.length !== currentInstances.length && (
+                  <span className="tpl-action-bar__total"> · 全部模板共 {templateInstances.length} 实例</span>
+                )}
               </span>
             )}
           </div>
@@ -126,6 +155,20 @@ export const TemplateWorkspace: React.FC = () => {
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                className="tpl-instance-panel__btn tpl-instance-panel__btn--danger"
+                onClick={handleClearCurrent}
+                disabled={currentInstances.length === 0}
+                title="清空当前模板实例"
+              >清空当前</button>
+              <button
+                type="button"
+                className="tpl-instance-panel__btn tpl-instance-panel__btn--danger"
+                onClick={handleClearAll}
+                disabled={templateInstances.length === 0}
+                title="清空全部模板实例"
+              >清空全部</button>
               <button
                 type="button"
                 className="tpl-instance-panel__close"

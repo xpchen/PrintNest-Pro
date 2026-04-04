@@ -222,6 +222,10 @@ export interface TemplateSlice {
   instantiateAll: () => void;
   /** 实例化当前模板 × dataRecords */
   instantiateCurrentTemplate: () => void;
+  /** 清空全部模板实例 */
+  clearAllInstances: () => void;
+  /** 清空当前模板的实例 */
+  clearCurrentTemplateInstances: () => void;
 }
 
 export type AppState = ProjectSlice & SelectionSlice & CanvasViewSlice & LayoutJobSlice & UiShellSlice & TemplateSlice;

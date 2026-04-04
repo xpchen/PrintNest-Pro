@@ -165,4 +165,14 @@ export const createTemplateSlice: StateCreator<AppState, [], [], TemplateSlice> 
     const otherInstances = s.templateInstances.filter((i) => i.templateId !== tpl.id);
     set({ templateInstances: [...otherInstances, ...instances] });
   },
+
+  clearAllInstances: () => {
+    set({ templateInstances: [] });
+  },
+
+  clearCurrentTemplateInstances: () => {
+    const s = get();
+    if (!s.currentTemplateId) return;
+    set({ templateInstances: s.templateInstances.filter((i) => i.templateId !== s.currentTemplateId) });
+  },
 });
