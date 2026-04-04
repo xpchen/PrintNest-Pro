@@ -33,9 +33,12 @@ function runLayoutInWorker(
   contents: WebContents | undefined,
 ): Promise<LayoutResult> {
   return new Promise((resolve, reject) => {
+    // 终止前一个 worker 并等待其退出，避免事件竞态
     if (activeLayoutWorker) {
-      void activeLayoutWorker.terminate();
+      const prev = activeLayoutWorker;
       activeLayoutWorker = null;
+      prev.removeAllListeners();
+      void prev.terminate();
     }
     sendProgress(contents, { phase: 'start', pct: 0 });
     const workerPath = path.join(__dirname, 'layoutWorker.js');
@@ -51,7 +54,9 @@ function runLayoutInWorker(
     const settle = (fn: () => void) => {
       if (settled) return;
       settled = true;
+      // 仅当我们仍是活跃 worker 时才清空引用
       if (activeLayoutWorker === w) activeLayoutWorker = null;
+      w.removeAllListeners();
       void w.terminate();
       fn();
     };
@@ -64,6 +69,9 @@ function runLayoutInWorker(
     });
     w.on('error', (err) => {
       settle(() => reject(err));
+    });
+    w.on('exit', (code) => {
+      settle(() => reject(new Error(`Worker exited unexpectedly with code ${code}`)));
     });
   });
 }

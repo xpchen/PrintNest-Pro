@@ -238,7 +238,7 @@ describe('applyManualEditPatch', () => {
 
       const clone = getPlacement(applied, 'dup_1')!;
       expect(clone.locked).toBe(false);
-      expect(clone.hidden).toBeUndefined();
+      expect(clone.hidden).toBe(false);
     });
   });
 

@@ -167,7 +167,17 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   },
 
   setConfig: (patch) => {
-    set((s) => ({ config: { ...s.config, ...patch } }));
+    set((s) => {
+      const merged = { ...s.config, ...patch };
+      // 画布尺寸正数校验
+      if (merged.canvas) {
+        merged.canvas = {
+          width: Math.max(1, merged.canvas.width || 1),
+          height: Math.max(1, merged.canvas.height || 1),
+        };
+      }
+      return { config: merged };
+    });
   },
 
   setCanvasSize: (width, height) => {

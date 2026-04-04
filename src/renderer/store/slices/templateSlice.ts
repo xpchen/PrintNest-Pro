@@ -173,10 +173,8 @@ export const createTemplateSlice: StateCreator<AppState, [], [], TemplateSlice> 
   clearCurrentTemplateInstances: () => {
     const s = get();
     const tid = s.currentTemplateId;
-    console.log('[clearCurrentTemplateInstances]', { tid, total: s.templateInstances.length });
     if (!tid) return;
     const remaining = s.templateInstances.filter((i) => i.templateId !== tid);
-    console.log('[clearCurrentTemplateInstances] remaining:', remaining.length);
     set({ templateInstances: remaining });
   },
 });

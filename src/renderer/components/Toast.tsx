@@ -32,13 +32,16 @@ export function showToast(msg: string, level?: ToastLevel): void {
 
 export const ToastContainer: React.FC = () => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const timersRef = React.useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   const addToast = useCallback((message: string, level: ToastLevel = 'info') => {
     const id = nextId++;
     setToasts((prev) => [...prev, { id, message, level }]);
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      timersRef.current.delete(timer);
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3000);
+    timersRef.current.add(timer);
   }, []);
 
   useEffect(() => {
@@ -50,6 +53,9 @@ export const ToastContainer: React.FC = () => {
     }
     return () => {
       addToastFn = null;
+      // 卸载时清除所有待执行的 setTimeout
+      for (const t of timersRef.current) clearTimeout(t);
+      timersRef.current.clear();
     };
   }, [addToast]);
 

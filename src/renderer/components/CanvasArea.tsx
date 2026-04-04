@@ -131,34 +131,30 @@ export const CanvasArea: React.FC = () => {
     [items]
   );
 
-  /** Preload all images for current canvas, trigger redraw when done */
+  /** Preload all images (items + current canvas placements), trigger redraw when done */
   useEffect(() => {
-    if (!currentCanvas) return;
+    let cancelled = false;
     const srcs = new Set<string>();
-    currentCanvas.placements.forEach((p) => {
-      const item = getItem(p.printItemId);
-      if (item?.imageSrc && !imageCache.has(item.imageSrc)) srcs.add(item.imageSrc);
+    // 从 items 收集
+    items.forEach((i) => {
+      if (i.imageSrc && !imageCache.has(i.imageSrc)) srcs.add(i.imageSrc);
     });
+    // 从当前画布 placements 收集（可能引用不同图源）
+    if (currentCanvas) {
+      currentCanvas.placements.forEach((p) => {
+        const item = getItem(p.printItemId);
+        if (item?.imageSrc && !imageCache.has(item.imageSrc)) srcs.add(item.imageSrc);
+      });
+    }
     if (srcs.size === 0) return;
     let loaded = 0;
     srcs.forEach((src) => {
       loadImage(src)
-        .then(() => { if (++loaded === srcs.size) setImgLoadCount((c) => c + 1); })
-        .catch(() => { if (++loaded === srcs.size) setImgLoadCount((c) => c + 1); });
+        .then(() => { if (!cancelled && ++loaded === srcs.size) setImgLoadCount((c) => c + 1); })
+        .catch(() => { if (!cancelled && ++loaded === srcs.size) setImgLoadCount((c) => c + 1); });
     });
-  }, [currentCanvas, getItem]);
-
-  /** Also preload images when items change (before layout) */
-  useEffect(() => {
-    const srcs = items.filter((i) => i.imageSrc && !imageCache.has(i.imageSrc)).map((i) => i.imageSrc);
-    if (srcs.length === 0) return;
-    let loaded = 0;
-    srcs.forEach((src) => {
-      loadImage(src)
-        .then(() => { if (++loaded === srcs.length) setImgLoadCount((c) => c + 1); })
-        .catch(() => { if (++loaded === srcs.length) setImgLoadCount((c) => c + 1); });
-    });
-  }, [items]);
+    return () => { cancelled = true; };
+  }, [currentCanvas, items, getItem]);
 
   useEffect(() => {
     const el = containerRef.current;

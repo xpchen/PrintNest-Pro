@@ -168,7 +168,7 @@ function handleDuplicate(
     ...placement,
     id: idGen(),
     locked: false,
-    hidden: undefined,
+    hidden: false,
     x: placement.x + (patch.delta?.dx ?? 0),
     y: placement.y + (patch.delta?.dy ?? 0),
   };
