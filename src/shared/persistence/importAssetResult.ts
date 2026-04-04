@@ -3,4 +3,6 @@ export interface ImportAssetResult {
   absolutePath: string;
   assetId: string;
   relativePath: string;
+  /** 缩略图相对路径（长边 800px），可能为 undefined（生成失败时） */
+  thumbnailRelativePath?: string;
 }

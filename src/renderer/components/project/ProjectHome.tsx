@@ -126,11 +126,19 @@ export const ProjectHome: React.FC<ProjectHomeProps> = ({ onEnteredEditor }) => 
     if (allIds.length > 0) await openProject(allIds[0]);
   }, [allIds, openProject]);
 
+  const showConfirm = useAppStore((s) => s.showConfirm);
+
   const handleDelete = useCallback(
     async (projectId: string) => {
       const api = window.electronAPI;
       if (!api?.deleteProject) return;
-      if (!window.confirm(`确定删除项目「${projectId}」？此操作不可恢复。`)) return;
+      const confirmed = await showConfirm({
+        title: '删除项目',
+        message: `确定删除项目「${projectId}」？此操作不可恢复。`,
+        confirmLabel: '删除',
+        danger: true,
+      });
+      if (!confirmed) return;
       await api.deleteProject(projectId);
       try {
         if (localStorage.getItem(LAST_KEY) === projectId) localStorage.removeItem(LAST_KEY);
@@ -139,7 +147,7 @@ export const ProjectHome: React.FC<ProjectHomeProps> = ({ onEnteredEditor }) => 
       }
       void refreshList();
     },
-    [refreshList],
+    [refreshList, showConfirm],
   );
 
   const hasList = summaries.length > 0 || idFallback.length > 0;

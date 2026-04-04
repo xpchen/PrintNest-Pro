@@ -99,8 +99,8 @@ export interface TemplateElementBase {
 
 export interface FixedImageElement extends TemplateElementBase {
   type: 'fixedImage';
-  /** 图片路径或 base64 */
-  fixedValue: string;
+  /** 资产 id（对应 assets 表 row_id），不存 base64/路径 */
+  assetId: string;
   /** 图片填充模式 */
   fitMode?: 'fill' | 'contain' | 'cover';
 }
@@ -109,8 +109,8 @@ export interface VariableImageElement extends TemplateElementBase {
   type: 'variableImage';
   binding: FieldBinding;
   fitMode?: 'fill' | 'contain' | 'cover';
-  /** 图片缺失时的回退图 */
-  fallbackImageSrc?: string;
+  /** 图片缺失时的回退资产 id */
+  fallbackAssetId?: string;
 }
 
 export interface FixedTextElement extends TemplateElementBase {
@@ -223,8 +223,8 @@ export interface ResolvedTemplateElement {
   widthMm: number;
   heightMm: number;
   resolvedText?: string;
+  /** fixedImage → assetId; variableImage → 运行时从 record 解析的资产 id 或路径 */
   resolvedImageAssetId?: string;
-  resolvedImageSrc?: string;
   resolvedBarcodeValue?: string;
 }
 

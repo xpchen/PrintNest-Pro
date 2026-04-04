@@ -9,16 +9,47 @@ function migrateLeftTaskTab(raw: unknown): LeftTaskTab | undefined {
   return undefined;
 }
 
-export const createUiShellSlice: StateCreator<AppState, [], [], UiShellSlice> = (set) => ({
+const emptyConfirmDialog = (): AppState['confirmDialog'] => ({
+  open: false,
+  title: '',
+  message: '',
+  resolve: null,
+});
+
+export const createUiShellSlice: StateCreator<AppState, [], [], UiShellSlice> = (set, get) => ({
   leftDockCollapsed: false,
   rightDockCollapsed: false,
   saveStatus: 'idle' as const,
+  confirmDialog: emptyConfirmDialog(),
 
   toggleLeftDock: () => set((s) => ({ leftDockCollapsed: !s.leftDockCollapsed })),
   toggleRightDock: () => set((s) => ({ rightDockCollapsed: !s.rightDockCollapsed })),
   expandLeftDock: () => set({ leftDockCollapsed: false }),
   expandRightDock: () => set({ rightDockCollapsed: false }),
   setSaveStatus: (status) => set({ saveStatus: status }),
+
+  showConfirm: (opts) =>
+    new Promise<boolean>((resolve) => {
+      // 如果已有未关闭的 dialog，先 dismiss 它
+      const prev = get().confirmDialog;
+      if (prev.open && prev.resolve) prev.resolve(false);
+      set({
+        confirmDialog: {
+          open: true,
+          title: opts.title,
+          message: opts.message,
+          confirmLabel: opts.confirmLabel,
+          danger: opts.danger,
+          resolve,
+        },
+      });
+    }),
+
+  dismissConfirm: (confirmed) => {
+    const { resolve } = get().confirmDialog;
+    if (resolve) resolve(confirmed);
+    set({ confirmDialog: emptyConfirmDialog() });
+  },
 });
 
 export function loadUiShellFromStorage(

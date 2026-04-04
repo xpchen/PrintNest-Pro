@@ -13,6 +13,7 @@ import { ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
+import sharp from 'sharp';
 import { getAppDataProjectsRoot, getProjectDirectory, ensureProjectLayout } from './projectPaths';
 import {
   loadEditorState,
@@ -42,8 +43,43 @@ function getAssetsDir(projectId: string): string {
   return dir;
 }
 
+const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB
+const THUMBNAIL_MAX_EDGE = 800; // 缩略图长边 px
+
+/** 生成缩略图，返回缩略图相对路径（相对于项目根）；失败返回 undefined */
+async function generateThumbnail(
+  srcPath: string,
+  assetsDir: string,
+  baseName: string,
+): Promise<{ thumbRelPath: string; pixelWidth: number; pixelHeight: number } | undefined> {
+  try {
+    const img = sharp(srcPath);
+    const metadata = await img.metadata();
+    const w = metadata.width ?? 0;
+    const h = metadata.height ?? 0;
+    if (w === 0 || h === 0) return undefined;
+
+    const thumbName = `${baseName}_thumb.png`;
+    const thumbPath = path.join(assetsDir, thumbName);
+
+    await img
+      .resize({ width: THUMBNAIL_MAX_EDGE, height: THUMBNAIL_MAX_EDGE, fit: 'inside', withoutEnlargement: true })
+      .png({ quality: 80 })
+      .toFile(thumbPath);
+
+    return {
+      thumbRelPath: `assets/${thumbName}`,
+      pixelWidth: w,
+      pixelHeight: h,
+    };
+  } catch (err) {
+    log.import.warn('thumbnail generation failed', { srcPath, err });
+    return undefined;
+  }
+}
+
 /** 复制图片到项目素材目录，写入 assets 表，返回绝对路径与 assetId */
-function importAsset(projectId: string, srcPath: string): ImportAssetResult {
+async function importAsset(projectId: string, srcPath: string): Promise<ImportAssetResult> {
   ensureProjectLayout(projectId);
   const assetsDir = getAssetsDir(projectId);
   const ext = path.extname(srcPath);
@@ -52,22 +88,47 @@ function importAsset(projectId: string, srcPath: string): ImportAssetResult {
   const destName = `${baseName}_${timestamp}${ext}`;
   const destPath = path.join(assetsDir, destName);
 
+  // 大文件保护
+  try {
+    const stats = fs.statSync(srcPath);
+    if (stats.size > MAX_FILE_BYTES) {
+      throw new Error(`File too large (${(stats.size / 1024 / 1024).toFixed(1)}MB, max 50MB)`);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('too large')) throw err;
+    // statSync 失败继续尝试导入
+  }
+
   fs.copyFileSync(srcPath, destPath);
   const relativePath = path.join('assets', destName).split(path.sep).join('/');
   const assetId = crypto.randomUUID();
   const now = new Date().toISOString();
+
+  // 生成缩略图 + 读取图片尺寸
+  const thumbBaseName = `${baseName}_${timestamp}`;
+  const thumbResult = await generateThumbnail(srcPath, assetsDir, thumbBaseName);
+
   const db = getOrOpenProjectDb(projectId);
   if (db) {
     db.prepare(
-      `INSERT INTO assets (id, managed_relative_path, imported_at) VALUES (?, ?, ?)`,
-    ).run(assetId, relativePath, now);
+      `INSERT INTO assets (id, managed_relative_path, pixel_width, pixel_height, imported_at) VALUES (?, ?, ?, ?, ?)`,
+    ).run(assetId, relativePath, thumbResult?.pixelWidth ?? null, thumbResult?.pixelHeight ?? null, now);
   }
-  return { absolutePath: destPath, assetId, relativePath };
+  return {
+    absolutePath: destPath,
+    assetId,
+    relativePath,
+    thumbnailRelativePath: thumbResult?.thumbRelPath,
+  };
 }
 
 /** 批量导入素材（受管 assets/ + DB 登记） */
-function importAssets(projectId: string, srcPaths: string[]): ImportAssetResult[] {
-  return srcPaths.map((p) => importAsset(projectId, p));
+async function importAssets(projectId: string, srcPaths: string[]): Promise<ImportAssetResult[]> {
+  const results: ImportAssetResult[] = [];
+  for (const p of srcPaths) {
+    results.push(await importAsset(projectId, p));
+  }
+  return results;
 }
 
 function payloadToEditorState(projectId: string, data: object): SerializedEditorState {
@@ -264,6 +325,15 @@ export function registerFileManagerIPC(): void {
   // 读取文件为 base64（用于渲染器显示本地图片）
   ipcMain.handle('file:readAsBase64', async (_event, filePath: string) => {
     if (!fs.existsSync(filePath)) return null;
+    // 大文件保护
+    const stats = fs.statSync(filePath);
+    if (stats.size > MAX_FILE_BYTES) {
+      log.import.warn('readAsBase64: file too large, rejected', {
+        filePath,
+        sizeMB: (stats.size / 1024 / 1024).toFixed(1),
+      });
+      throw new Error(`File too large (${(stats.size / 1024 / 1024).toFixed(1)}MB, max 50MB)`);
+    }
     const ext = path.extname(filePath).toLowerCase().replace('.', '');
     const mimeMap: Record<string, string> = {
       png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',

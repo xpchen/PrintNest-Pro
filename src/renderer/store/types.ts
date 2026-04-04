@@ -69,15 +69,28 @@ export type EditorWorkMode = 'resources' | 'template' | 'layout' | 'output';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
+export interface ConfirmDialogState {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  danger?: boolean;
+  /** 内部 resolver —— 不进入持久化 */
+  resolve: ((confirmed: boolean) => void) | null;
+}
+
 export interface UiShellSlice {
   leftDockCollapsed: boolean;
   rightDockCollapsed: boolean;
   saveStatus: SaveStatus;
+  confirmDialog: ConfirmDialogState;
   toggleLeftDock: () => void;
   toggleRightDock: () => void;
   expandLeftDock: () => void;
   expandRightDock: () => void;
   setSaveStatus: (status: SaveStatus) => void;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; danger?: boolean }) => Promise<boolean>;
+  dismissConfirm: (confirmed: boolean) => void;
 }
 
 export interface CanvasViewSlice {
@@ -203,8 +216,10 @@ export interface TemplateSlice {
   removeElement: (templateId: string, elementId: string) => void;
   reorderElements: (templateId: string, orderedIds: string[]) => void;
 
-  /** 批量实例化：对当前模板 × dataRecords 调用引擎 */
+  /** 批量实例化：对所有模板 × dataRecords 调用引擎（底层能力，不暴露 UI 入口） */
   instantiateAll: () => void;
+  /** 实例化当前模板 × dataRecords */
+  instantiateCurrentTemplate: () => void;
 }
 
 export type AppState = ProjectSlice & SelectionSlice & CanvasViewSlice & LayoutJobSlice & UiShellSlice & TemplateSlice;

@@ -360,6 +360,43 @@ export const CanvasArea: React.FC = () => {
           ctx.strokeStyle = dragBad ? '#ff4444' : warnVal ? '#ff9800' : isSel ? '#fff' : color;
           ctx.lineWidth = dragBad || warnVal ? 2 / z : isSel ? 2.5 / z : 1 / z;
           ctx.strokeRect(p.x, p.y, p.width, p.height);
+
+          // metadata 可读回退：模板名 + 关键字段 + 尺寸
+          const meta = item?.metadata;
+          if (meta && p.width * z > 40 && p.height * z > 28) {
+            const baseFontSize = Math.max(7 / z, 6);
+            ctx.textAlign = 'left';
+            let ty = p.y + baseFontSize + 3 / z;
+            const maxW = p.width - 6 / z;
+
+            // 模板名（粗体）
+            ctx.font = `bold ${baseFontSize * 1.1}px sans-serif`;
+            ctx.fillStyle = 'rgba(255,255,255,0.92)';
+            ctx.fillText(meta.templateName.slice(0, 20), p.x + 3 / z, ty, maxW);
+            ty += baseFontSize * 1.3;
+
+            // 关键字段
+            ctx.font = `${baseFontSize}px sans-serif`;
+            ctx.fillStyle = 'rgba(255,255,255,0.78)';
+            for (const kf of meta.keyFields.slice(0, 2)) {
+              if (ty > p.y + p.height - baseFontSize) break;
+              ctx.fillText(`${kf.label}: ${kf.value}`.slice(0, 24), p.x + 3 / z, ty, maxW);
+              ty += baseFontSize * 1.2;
+            }
+
+            // 尺寸
+            if (ty < p.y + p.height - baseFontSize) {
+              ctx.fillStyle = 'rgba(255,255,255,0.55)';
+              ctx.font = `${baseFontSize * 0.9}px sans-serif`;
+              ctx.fillText(
+                formatPairMm(p.width, p.height, displayUnit),
+                p.x + 3 / z,
+                ty,
+                maxW,
+              );
+            }
+            ctx.textAlign = 'start';
+          }
         }
 
         // Hidden overlay — semi-transparent dashed border

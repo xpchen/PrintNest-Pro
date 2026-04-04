@@ -1,55 +1,14 @@
 /**
- * 模板设计画布 — 显示当前模板的元素布局，支持添加/选中/拖动元素
+ * 模板设计画布 — 基于统一渲染协议 resolveTemplateDrawables 显示真实内容
  */
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import type { TemplateElement, FixedTextElement, FixedImageElement } from '../../../shared/types';
+import type { TemplateElement } from '../../../shared/types';
+import { resolveTemplateDrawables } from '../../../shared/template/resolveDrawables';
+import type { ResolvedDrawable } from '../../../shared/types/template-render';
 
 const CANVAS_PADDING = 20;
-const PX_PER_MM = 3; // 画布缩放因子
-
-function elementColor(type: TemplateElement['type']): string {
-  switch (type) {
-    case 'fixedText':
-    case 'variableText':
-      return '#4ECDC4';
-    case 'fixedImage':
-    case 'variableImage':
-      return '#FF6B6B';
-    case 'barcode':
-      return '#45B7D1';
-    case 'qrcode':
-      return '#96CEB4';
-    case 'mark':
-      return '#DDA0DD';
-  }
-}
-
-function elementLabel(el: TemplateElement, previewFields?: Record<string, string>): string {
-  // 预览模式下，变量类型显示解析后的值
-  if (previewFields && 'binding' in el && el.binding?.fieldKey) {
-    const val = previewFields[el.binding.fieldKey];
-    if (val) return val.slice(0, 20);
-    return `⚠ ${el.binding.fieldKey}`;
-  }
-  if (el.name) return el.name;
-  switch (el.type) {
-    case 'fixedText':
-      return (el as FixedTextElement).fixedValue?.slice(0, 12) || 'Text';
-    case 'variableText':
-      return `{${el.binding.fieldKey || '?'}}`;
-    case 'fixedImage':
-      return 'Image';
-    case 'variableImage':
-      return `Img:{${el.binding.fieldKey || '?'}}`;
-    case 'barcode':
-      return `BC:{${el.binding.fieldKey || '?'}}`;
-    case 'qrcode':
-      return `QR:{${el.binding.fieldKey || '?'}}`;
-    case 'mark':
-      return el.markKind;
-  }
-}
+const PX_PER_MM = 3;
 
 function newElementId(): string {
   return `el_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -61,6 +20,141 @@ interface DragState {
   startY: number;
   origXMm: number;
   origYMm: number;
+}
+
+/** SVG 文本对齐映射 */
+function svgTextAnchor(align?: 'left' | 'center' | 'right'): 'start' | 'middle' | 'end' {
+  if (align === 'center') return 'middle';
+  if (align === 'right') return 'end';
+  return 'start';
+}
+
+/** 根据对齐计算文本 x 偏移 */
+function textXOffset(align: string | undefined, w: number): number {
+  if (align === 'center') return w / 2;
+  if (align === 'right') return w - 3;
+  return 3;
+}
+
+function DrawableRenderer({ d, px }: { d: ResolvedDrawable; px: number }) {
+  const x = CANVAS_PADDING + d.x * px;
+  const y = CANVAS_PADDING + d.y * px;
+  const w = d.w * px;
+  const h = d.h * px;
+
+  switch (d.type) {
+    case 'text': {
+      const fontSize = Math.max(8, Math.min(d.style.fontSizePt * (px / 3), h * 0.8));
+      return (
+        <g>
+          <rect x={x} y={y} width={w} height={h} fill="#4ECDC422" stroke="none" />
+          <text
+            x={x + textXOffset(d.style.align, w)}
+            y={y + h / 2}
+            dominantBaseline="central"
+            textAnchor={svgTextAnchor(d.style.align)}
+            fontSize={fontSize}
+            fontWeight={d.style.fontWeight || 'normal'}
+            fill={d.source === 'missing' ? '#e53e3e' : (d.style.color || 'var(--text-primary, #333)')}
+            pointerEvents="none"
+            clipPath={`inset(0 0 0 0)`}
+          >
+            {d.content.length > 30 ? d.content.slice(0, 28) + '…' : d.content}
+          </text>
+        </g>
+      );
+    }
+
+    case 'image': {
+      if (d.src) {
+        return (
+          <g>
+            <rect x={x} y={y} width={w} height={h} fill="#FF6B6B11" stroke="none" />
+            <image
+              href={d.src}
+              x={x + 1}
+              y={y + 1}
+              width={w - 2}
+              height={h - 2}
+              preserveAspectRatio={d.fitMode === 'fill' ? 'none' : d.fitMode === 'cover' ? 'xMidYMid slice' : 'xMidYMid meet'}
+            />
+          </g>
+        );
+      }
+      // missing image placeholder
+      return (
+        <g>
+          <rect x={x} y={y} width={w} height={h} fill="#FF6B6B22" stroke="#FF6B6B" strokeWidth={1} strokeDasharray="4,2" />
+          <text x={x + w / 2} y={y + h / 2} dominantBaseline="central" textAnchor="middle" fontSize={10} fill="#FF6B6B" pointerEvents="none">
+            {d.source === 'missing' ? '⚠ 无图片' : 'Image'}
+          </text>
+        </g>
+      );
+    }
+
+    case 'barcode': {
+      return (
+        <g>
+          <rect x={x} y={y} width={w} height={h} fill="#45B7D122" stroke="#45B7D1" strokeWidth={1} />
+          {/* 条码竖线占位 */}
+          {Array.from({ length: Math.min(12, Math.floor(w / 4)) }, (_, i) => (
+            <rect
+              key={i}
+              x={x + 4 + i * (w - 8) / 12}
+              y={y + 3}
+              width={Math.max(1, (w - 8) / 24)}
+              height={d.showHumanReadable ? h - 14 : h - 6}
+              fill="#45B7D1"
+            />
+          ))}
+          {d.showHumanReadable && (
+            <text x={x + w / 2} y={y + h - 3} textAnchor="middle" fontSize={8} fill={d.source === 'missing' ? '#e53e3e' : '#45B7D1'} pointerEvents="none">
+              {d.value.length > 16 ? d.value.slice(0, 14) + '…' : d.value}
+            </text>
+          )}
+        </g>
+      );
+    }
+
+    case 'qrcode': {
+      const cellSize = Math.min(w, h) / 8;
+      return (
+        <g>
+          <rect x={x} y={y} width={w} height={h} fill="#96CEB422" stroke="#96CEB4" strokeWidth={1} />
+          {/* QR 占位图案 */}
+          {[0, 1, 2].map((r) =>
+            [0, 1, 2].map((c) => (
+              <rect
+                key={`${r}-${c}`}
+                x={x + 3 + c * cellSize}
+                y={y + 3 + r * cellSize}
+                width={cellSize * 0.8}
+                height={cellSize * 0.8}
+                fill="#96CEB4"
+              />
+            )),
+          )}
+          <text x={x + w / 2} y={y + h - 4} textAnchor="middle" fontSize={7} fill={d.source === 'missing' ? '#e53e3e' : '#96CEB4'} pointerEvents="none">
+            QR
+          </text>
+        </g>
+      );
+    }
+
+    case 'rect': {
+      return (
+        <rect
+          x={x}
+          y={y}
+          width={w}
+          height={h}
+          fill={d.fill || 'none'}
+          stroke={d.stroke || '#DDA0DD'}
+          strokeWidth={(d.strokeWidth ?? 0.25) * px}
+        />
+      );
+    }
+  }
 }
 
 export const TemplateCanvas: React.FC = () => {
@@ -84,10 +178,27 @@ export const TemplateCanvas: React.FC = () => {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
+  // 统一渲染协议：从模板 + 预览记录 → drawables
+  const drawables = useMemo(() => {
+    if (!tpl) return [];
+    return resolveTemplateDrawables({
+      template: tpl,
+      record: previewRecord,
+      assetMap: new Map(), // TODO: 接入资产管线后填充
+      previewContext: { mode: previewRecord ? 'preview' : 'design' },
+    });
+  }, [tpl, previewRecord]);
+
+  // elementId → drawable 查找（选中高亮用）
+  const drawableMap = useMemo(() => {
+    const m = new Map<string, ResolvedDrawable>();
+    for (const d of drawables) m.set(d.elementId, d);
+    return m;
+  }, [drawables]);
+
   const handleAddElement = useCallback(
     (type: TemplateElement['type']) => {
       if (!currentTemplateId || !tpl) return;
-      // 新元素自动错位，避免完全重叠
       const offset = (tpl.elements.length % 10) * 8;
       const base = {
         id: newElementId(),
@@ -103,52 +214,22 @@ export const TemplateCanvas: React.FC = () => {
           el = { ...base, type: 'fixedText', fixedValue: '示例文本', style: { fontSizePt: 12 } };
           break;
         case 'variableText':
-          el = {
-            ...base,
-            type: 'variableText',
-            binding: { mode: 'field' },
-            style: { fontSizePt: 12 },
-          };
+          el = { ...base, type: 'variableText', binding: { mode: 'field' }, style: { fontSizePt: 12 } };
           break;
         case 'fixedImage':
-          el = { ...base, type: 'fixedImage', fixedValue: '', widthMm: 25, heightMm: 25 };
+          el = { ...base, type: 'fixedImage', assetId: '', widthMm: 25, heightMm: 25 };
           break;
         case 'variableImage':
-          el = {
-            ...base,
-            type: 'variableImage',
-            binding: { mode: 'field' },
-            widthMm: 25,
-            heightMm: 25,
-          };
+          el = { ...base, type: 'variableImage', binding: { mode: 'field' }, widthMm: 25, heightMm: 25 };
           break;
         case 'barcode':
-          el = {
-            ...base,
-            type: 'barcode',
-            binding: { mode: 'field' },
-            widthMm: 40,
-            heightMm: 15,
-            barcodeStyle: { format: 'code128' },
-          };
+          el = { ...base, type: 'barcode', binding: { mode: 'field' }, widthMm: 40, heightMm: 15, barcodeStyle: { format: 'code128' } };
           break;
         case 'qrcode':
-          el = {
-            ...base,
-            type: 'qrcode',
-            binding: { mode: 'field' },
-            widthMm: 20,
-            heightMm: 20,
-          };
+          el = { ...base, type: 'qrcode', binding: { mode: 'field' }, widthMm: 20, heightMm: 20 };
           break;
         case 'mark':
-          el = {
-            ...base,
-            type: 'mark',
-            markKind: 'crosshair',
-            widthMm: 5,
-            heightMm: 5,
-          };
+          el = { ...base, type: 'mark', markKind: 'crosshair', widthMm: 5, heightMm: 5 };
           break;
         default:
           return;
@@ -177,7 +258,6 @@ export const TemplateCanvas: React.FC = () => {
     selectElements([]);
   }, [selectElements]);
 
-  // ── 拖动逻辑 ──
   const handleMouseDown = useCallback(
     (id: string, e: React.MouseEvent) => {
       if (!currentTemplateId || !tpl) return;
@@ -185,17 +265,10 @@ export const TemplateCanvas: React.FC = () => {
       if (!el || el.locked) return;
       e.stopPropagation();
       e.preventDefault();
-      // 选中
       if (!selectedElementIds.includes(id)) {
         selectElements([id]);
       }
-      setDragState({
-        elementId: id,
-        startX: e.clientX,
-        startY: e.clientY,
-        origXMm: el.xMm,
-        origYMm: el.yMm,
-      });
+      setDragState({ elementId: id, startX: e.clientX, startY: e.clientY, origXMm: el.xMm, origYMm: el.yMm });
     },
     [currentTemplateId, tpl, selectedElementIds, selectElements],
   );
@@ -205,7 +278,7 @@ export const TemplateCanvas: React.FC = () => {
       if (!dragState || !currentTemplateId) return;
       const dx = (e.clientX - dragState.startX) / PX_PER_MM;
       const dy = (e.clientY - dragState.startY) / PX_PER_MM;
-      const newX = Math.round((dragState.origXMm + dx) * 2) / 2; // snap to 0.5mm
+      const newX = Math.round((dragState.origXMm + dx) * 2) / 2;
       const newY = Math.round((dragState.origYMm + dy) * 2) / 2;
       updateElement(currentTemplateId, dragState.elementId, { xMm: newX, yMm: newY });
     },
@@ -239,9 +312,7 @@ export const TemplateCanvas: React.FC = () => {
             ◀
           </button>
           <span className="tpl-canvas__preview-idx">
-            {previewRecord
-              ? `${previewIdx + 1} / ${dataRecords.length}`
-              : '未选择'}
+            {previewRecord ? `${previewIdx + 1} / ${dataRecords.length}` : '未选择'}
           </span>
           <button
             type="button"
@@ -318,45 +389,42 @@ export const TemplateCanvas: React.FC = () => {
               strokeWidth={1}
             />
 
-            {/* 元素 */}
-            {tpl.elements
-              .filter((el) => !el.hidden)
-              .map((el) => {
-                const x = CANVAS_PADDING + el.xMm * PX_PER_MM;
-                const y = CANVAS_PADDING + el.yMm * PX_PER_MM;
-                const w = el.widthMm * PX_PER_MM;
-                const h = el.heightMm * PX_PER_MM;
-                const selected = selectedElementIds.includes(el.id);
-                const color = elementColor(el.type);
+            {/* 元素渲染：基于统一协议层 */}
+            {drawables
+              .filter((d) => !d.hidden)
+              .map((d) => {
+                const selected = selectedElementIds.includes(d.elementId);
+                const x = CANVAS_PADDING + d.x * PX_PER_MM;
+                const y = CANVAS_PADDING + d.y * PX_PER_MM;
+                const w = d.w * PX_PER_MM;
+                const h = d.h * PX_PER_MM;
 
                 return (
                   <g
-                    key={el.id}
-                    onClick={(e) => handleClickElement(el.id, e)}
-                    onMouseDown={(e) => handleMouseDown(el.id, e)}
-                    style={{ cursor: el.locked ? 'not-allowed' : 'grab' }}
+                    key={d.elementId}
+                    onClick={(e) => handleClickElement(d.elementId, e)}
+                    onMouseDown={(e) => handleMouseDown(d.elementId, e)}
+                    style={{ cursor: d.locked ? 'not-allowed' : 'grab' }}
                   >
-                    <rect
-                      x={x}
-                      y={y}
-                      width={w}
-                      height={h}
-                      fill={`${color}22`}
-                      stroke={selected ? 'var(--accent, #3b82f6)' : color}
-                      strokeWidth={selected ? 2 : 1}
-                      strokeDasharray={el.locked ? '4,2' : undefined}
-                    />
-                    <text
-                      x={x + 3}
-                      y={y + 12}
-                      fontSize={10}
-                      fill="var(--text-primary, #333)"
-                      pointerEvents="none"
-                    >
-                      {elementLabel(el, previewRecord?.fields)}
-                    </text>
+                    {/* 真实内容渲染 */}
+                    <DrawableRenderer d={d} px={PX_PER_MM} />
+
+                    {/* 选中边框 */}
+                    {selected && (
+                      <rect
+                        x={x}
+                        y={y}
+                        width={w}
+                        height={h}
+                        fill="none"
+                        stroke="var(--accent, #3b82f6)"
+                        strokeWidth={2}
+                        strokeDasharray={d.locked ? '4,2' : undefined}
+                      />
+                    )}
+
                     {/* 选中手柄 */}
-                    {selected && !el.locked && (
+                    {selected && !d.locked && (
                       <>
                         <rect x={x - 3} y={y - 3} width={6} height={6} fill="var(--accent, #3b82f6)" />
                         <rect x={x + w - 3} y={y - 3} width={6} height={6} fill="var(--accent, #3b82f6)" />

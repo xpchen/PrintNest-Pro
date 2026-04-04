@@ -354,6 +354,7 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
       defaultSpacing: s.config.globalSpacing,
       defaultBleed: s.config.globalBleed,
       allowRotation: s.config.allowRotation,
+      templates: s.templates,
     });
 
     // 将实例生成的 items 设为当前 items，然后跑 runAutoLayout

@@ -42,6 +42,7 @@ describe('instancesToPrintItems', () => {
     expect(items[0].name).toBe('A001');
     expect(items[0].spacing).toBe(2);
     expect(items[0].bleed).toBe(3);
+    expect(items[0].allowRotation).toBe(false); // 模板实例默认禁止旋转
   });
 
   it('defaults qty to 1 if record not found', () => {
@@ -64,5 +65,19 @@ describe('instancesToPrintItems', () => {
     expect(items.length).toBe(2);
     expect(items[0].quantity).toBe(2);
     expect(items[1].quantity).toBe(3);
+  });
+
+  it('fills metadata with template name and key fields', () => {
+    const instances = [makeInstance('i1', 'r1')];
+    const records = [makeRecord('r1', { '内部单号': 'A001', '品名': '标签', '规格': '50x30' })];
+    const templates = [{ id: 'tpl_1', name: '产品标签', version: 1, status: 'draft' as const, canvasMode: 'single_piece' as const, widthMm: 100, heightMm: 60, elements: [], createdAt: '', updatedAt: '' }];
+    const items = instancesToPrintItems(instances, records, { ...opts, templates });
+
+    expect(items[0].metadata).toBeDefined();
+    expect(items[0].metadata!.templateName).toBe('产品标签');
+    expect(items[0].metadata!.sourceTemplateId).toBe('tpl_1');
+    expect(items[0].metadata!.sourceRecordId).toBe('r1');
+    expect(items[0].metadata!.keyFields.length).toBe(3);
+    expect(items[0].metadata!.keyFields[0]).toEqual({ label: '内部单号', value: 'A001' });
   });
 });

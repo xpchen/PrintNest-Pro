@@ -65,20 +65,20 @@ function resolveElement(
     }
 
     case 'fixedImage':
-      base.resolvedImageSrc = el.fixedValue;
+      base.resolvedImageAssetId = el.assetId;
       break;
 
     case 'variableImage': {
       const key = el.binding.fieldKey;
       if (!key) {
-        base.resolvedImageSrc = el.fallbackImageSrc ?? '';
+        base.resolvedImageAssetId = el.fallbackAssetId ?? '';
       } else {
         const val = record.fields[key];
         if (val === undefined || val === '') {
-          if (el.fallbackImageSrc) {
-            base.resolvedImageSrc = el.fallbackImageSrc;
+          if (el.fallbackAssetId) {
+            base.resolvedImageAssetId = el.fallbackAssetId;
           } else {
-            base.resolvedImageSrc = '';
+            base.resolvedImageAssetId = '';
             issues.push({
               id: issueId(),
               level: 'error',
@@ -89,7 +89,8 @@ function resolveElement(
             });
           }
         } else {
-          base.resolvedImageSrc = val;
+          // variableImage 绑定值可能是资产 id 或外部路径
+          base.resolvedImageAssetId = val;
         }
       }
       break;

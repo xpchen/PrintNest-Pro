@@ -118,4 +118,14 @@ export const createTemplateSlice: StateCreator<AppState, [], [], TemplateSlice> 
     }
     set({ templateInstances: allInstances });
   },
+
+  instantiateCurrentTemplate: () => {
+    const s = get();
+    const tpl = s.templates.find((t) => t.id === s.currentTemplateId);
+    if (!tpl) return;
+    const { instances } = instantiateTemplate(tpl, s.dataRecords);
+    // 保留其他模板的实例，替换当前模板的实例
+    const otherInstances = s.templateInstances.filter((i) => i.templateId !== tpl.id);
+    set({ templateInstances: [...otherInstances, ...instances] });
+  },
 });

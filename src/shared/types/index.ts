@@ -29,6 +29,19 @@ export interface PrintItem {
   bleed: number;
   /** 颜色标识 (用于画布预览) */
   color: string;
+  /** 模板来源元数据（模板实例 → PrintItem 时填充，用于排版画布可读回退） */
+  metadata?: PrintItemMetadata;
+}
+
+/** 排版画布 metadata 回退信息（只承担"可识别、可追溯"） */
+export interface PrintItemMetadata {
+  templateName: string;
+  /** 关键字段摘要（最多 3 个） */
+  keyFields: { label: string; value: string }[];
+  /** 来源追溯 */
+  sourceTemplateId: string;
+  sourceRecordId: string;
+  sourceInstanceId: string;
 }
 
 /** 排版单元 - 由 PrintItem 按数量展开后的单个实例 */
@@ -184,4 +197,5 @@ export interface LayoutValidationReport {
 
 export * from './domain';
 export * from './template';
+export * from './template-render';
 export * from './projectInit';

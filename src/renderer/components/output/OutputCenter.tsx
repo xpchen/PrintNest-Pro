@@ -165,12 +165,21 @@ export const OutputCenter: React.FC = () => {
     setSelectedProfileId(p.id);
   }, [currentProjectId, profiles.length, api]);
 
+  const showConfirm = useAppStore((s) => s.showConfirm);
+
   const handleDeleteProfile = useCallback(async (id: string) => {
     if (!currentProjectId || !api?.deleteExportProfile) return;
+    const confirmed = await showConfirm({
+      title: '删除导出预设',
+      message: '确定要删除该导出预设吗？',
+      confirmLabel: '删除',
+      danger: true,
+    });
+    if (!confirmed) return;
     await api.deleteExportProfile(currentProjectId, id);
     setProfiles((prev) => prev.filter((p) => p.id !== id));
     if (selectedProfileId === id) setSelectedProfileId(null);
-  }, [currentProjectId, selectedProfileId, api]);
+  }, [currentProjectId, selectedProfileId, api, showConfirm]);
 
   const handleExportAll = useCallback(async () => {
     if (!api || !result || result.canvases.length === 0) return;

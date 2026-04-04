@@ -71,9 +71,17 @@ export const AssetsPanel: React.FC = () => {
     setEditingItem(null);
   }, [editingItem, editForm, updateItem]);
 
-  const handleClear = useCallback(() => {
-    if (confirm('清空所有素材？')) clearItems();
-  }, [clearItems]);
+  const showConfirm = useAppStore((s) => s.showConfirm);
+
+  const handleClear = useCallback(async () => {
+    const confirmed = await showConfirm({
+      title: '清空素材',
+      message: '确定要清空所有素材吗？此操作不可撤销。',
+      confirmLabel: '清空',
+      danger: true,
+    });
+    if (confirmed) clearItems();
+  }, [clearItems, showConfirm]);
 
   const handleItemClick = useCallback(
     (itemId: string) => {

@@ -12,7 +12,8 @@ export const TemplateWorkspace: React.FC = () => {
   const dataRecords = useAppStore((s) => s.dataRecords);
   const templateInstances = useAppStore((s) => s.templateInstances);
   const templates = useAppStore((s) => s.templates);
-  const instantiateAll = useAppStore((s) => s.instantiateAll);
+  const instantiateCurrentTemplate = useAppStore((s) => s.instantiateCurrentTemplate);
+  const currentTemplateId = useAppStore((s) => s.currentTemplateId);
   const runAutoLayoutFromInstances = useAppStore((s) => s.runAutoLayoutFromInstances);
   const setEditorWorkMode = useAppStore((s) => s.setEditorWorkMode);
 
@@ -22,29 +23,34 @@ export const TemplateWorkspace: React.FC = () => {
   const handleInstantiate = useCallback(() => {
     setInstantiating(true);
     try {
-      instantiateAll();
+      instantiateCurrentTemplate();
       setShowInstances(true);
     } finally {
       setInstantiating(false);
     }
-  }, [instantiateAll]);
+  }, [instantiateCurrentTemplate]);
 
   const handleSendToLayout = useCallback(async () => {
     await runAutoLayoutFromInstances();
     setEditorWorkMode('layout');
   }, [runAutoLayoutFromInstances, setEditorWorkMode]);
 
-  const readyCount = templateInstances.filter((i) => i.status === 'valid').length;
-  const warnCount = templateInstances.filter((i) => i.status === 'warning').length;
-  const errorCount = templateInstances.filter((i) => i.status === 'error').length;
+  // 只显示当前模板的实例
+  const currentInstances = useMemo(
+    () => currentTemplateId ? templateInstances.filter((i) => i.templateId === currentTemplateId) : [],
+    [templateInstances, currentTemplateId],
+  );
+  const readyCount = currentInstances.filter((i) => i.status === 'valid').length;
+  const warnCount = currentInstances.filter((i) => i.status === 'warning').length;
+  const errorCount = currentInstances.filter((i) => i.status === 'error').length;
 
   const [instanceFilter, setInstanceFilter] = useState<'all' | 'valid' | 'warning' | 'error'>('all');
   const filteredInstances = useMemo(() => {
-    if (instanceFilter === 'all') return templateInstances;
-    return templateInstances.filter((i) => i.status === instanceFilter);
-  }, [templateInstances, instanceFilter]);
+    if (instanceFilter === 'all') return currentInstances;
+    return currentInstances.filter((i) => i.status === instanceFilter);
+  }, [currentInstances, instanceFilter]);
 
-  const canInstantiate = templates.length > 0 && dataRecords.length > 0;
+  const canInstantiate = currentTemplateId != null && dataRecords.length > 0;
 
   return (
     <div className="tpl-workspace">
@@ -86,7 +92,7 @@ export const TemplateWorkspace: React.FC = () => {
               disabled={!canInstantiate || instantiating}
               onClick={handleInstantiate}
             >
-              {instantiating ? '实例化中…' : '批量实例化'}
+              {instantiating ? '实例化中…' : '实例化当前模板'}
             </button>
             <button
               type="button"

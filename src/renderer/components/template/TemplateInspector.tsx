@@ -3,7 +3,15 @@
  */
 import React, { useCallback, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import type { TemplateElement } from '../../../shared/types';
+import type {
+  TemplateElement,
+  FixedTextElement,
+  FixedImageElement,
+  VariableTextElement,
+  VariableImageElement,
+  BarcodeElement,
+  BarcodeFormat,
+} from '../../../shared/types';
 
 export const TemplateInspector: React.FC = () => {
   const currentTemplateId = useAppStore((s) => s.currentTemplateId);
@@ -12,12 +20,14 @@ export const TemplateInspector: React.FC = () => {
   const updateElement = useAppStore((s) => s.updateElement);
   const updateTemplate = useAppStore((s) => s.updateTemplate);
   const dataRecords = useAppStore((s) => s.dataRecords);
+  const previewRecordId = useAppStore((s) => s.previewRecordId);
 
   const tpl = templates.find((t) => t.id === currentTemplateId);
   const selectedElement =
     selectedElementIds.length === 1
       ? tpl?.elements.find((el) => el.id === selectedElementIds[0])
       : null;
+  const previewRecord = dataRecords.find((r) => r.id === previewRecordId);
 
   // 从 dataRecords 提取可用字段 keys
   const fieldKeys = useMemo(() => {
@@ -166,45 +176,317 @@ export const TemplateInspector: React.FC = () => {
             </label>
           </div>
 
-          {/* 固定文本值 */}
-          {selectedElement.type === 'fixedText' && (
-            <label className="tpl-inspector__field">
-              <span className="tpl-inspector__label">文本内容</span>
-              <input
-                type="text"
-                className="tpl-inspector__input"
-                value={selectedElement.fixedValue}
-                onChange={(e) => handleUpdateElement({ fixedValue: e.target.value } as Partial<TemplateElement>)}
-              />
-            </label>
-          )}
+          {/* ── fixedText: 内容 + 样式 ── */}
+          {selectedElement.type === 'fixedText' && (() => {
+            const el = selectedElement as FixedTextElement;
+            return (
+              <>
+                <label className="tpl-inspector__field">
+                  <span className="tpl-inspector__label">文本内容</span>
+                  <input
+                    type="text"
+                    className="tpl-inspector__input"
+                    value={el.fixedValue}
+                    onChange={(e) => handleUpdateElement({ fixedValue: e.target.value } as Partial<TemplateElement>)}
+                  />
+                </label>
+                <div className="tpl-inspector__field-row">
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">字号 (pt)</span>
+                    <input
+                      type="number"
+                      className="tpl-inspector__input"
+                      value={el.style.fontSizePt}
+                      min={1}
+                      onChange={(e) => handleUpdateElement({ style: { ...el.style, fontSizePt: Number(e.target.value) } } as Partial<TemplateElement>)}
+                    />
+                  </label>
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">粗细</span>
+                    <select
+                      className="tpl-inspector__input"
+                      value={el.style.fontWeight || 'normal'}
+                      onChange={(e) => handleUpdateElement({ style: { ...el.style, fontWeight: e.target.value as 'normal' | 'bold' } } as Partial<TemplateElement>)}
+                    >
+                      <option value="normal">常规</option>
+                      <option value="bold">粗体</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="tpl-inspector__field-row">
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">对齐</span>
+                    <select
+                      className="tpl-inspector__input"
+                      value={el.style.align || 'left'}
+                      onChange={(e) => handleUpdateElement({ style: { ...el.style, align: e.target.value as 'left' | 'center' | 'right' } } as Partial<TemplateElement>)}
+                    >
+                      <option value="left">左</option>
+                      <option value="center">居中</option>
+                      <option value="right">右</option>
+                    </select>
+                  </label>
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">颜色</span>
+                    <input
+                      type="color"
+                      className="tpl-inspector__input tpl-inspector__input--color"
+                      value={el.style.color || '#000000'}
+                      onChange={(e) => handleUpdateElement({ style: { ...el.style, color: e.target.value } } as Partial<TemplateElement>)}
+                    />
+                  </label>
+                </div>
+              </>
+            );
+          })()}
 
-          {/* 变量绑定 */}
-          {('binding' in selectedElement && selectedElement.binding) && (
-            <div className="tpl-inspector__binding">
-              <div className="tpl-inspector__label">字段绑定</div>
-              <select
-                className="tpl-inspector__input"
-                value={selectedElement.binding.fieldKey || ''}
-                onChange={(e) => {
-                  const fieldKey = e.target.value || undefined;
-                  handleUpdateElement({
-                    binding: { ...selectedElement.binding, fieldKey },
-                  } as Partial<TemplateElement>);
-                }}
-              >
-                <option value="">-- 选择字段 --</option>
-                {fieldKeys.map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-              </select>
-              {fieldKeys.length === 0 && (
-                <span className="tpl-inspector__hint">导入数据记录后可选择字段</span>
-              )}
-            </div>
-          )}
+          {/* ── variableText: 绑定 + 样式 + 预览值 ── */}
+          {selectedElement.type === 'variableText' && (() => {
+            const el = selectedElement as VariableTextElement;
+            const previewValue = previewRecord && el.binding.fieldKey
+              ? previewRecord.fields[el.binding.fieldKey]
+              : undefined;
+            return (
+              <>
+                <div className="tpl-inspector__binding">
+                  <span className="tpl-inspector__label">字段绑定</span>
+                  <select
+                    className="tpl-inspector__input"
+                    value={el.binding.fieldKey || ''}
+                    onChange={(e) => handleUpdateElement({ binding: { ...el.binding, fieldKey: e.target.value || undefined } } as Partial<TemplateElement>)}
+                  >
+                    <option value="">-- 选择字段 --</option>
+                    {fieldKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                  {fieldKeys.length === 0 && (
+                    <span className="tpl-inspector__hint">导入数据记录后可选择字段</span>
+                  )}
+                </div>
+                {previewRecord && (
+                  <div className="tpl-inspector__preview-value">
+                    <span className="tpl-inspector__label">预览值</span>
+                    <span className={`tpl-inspector__preview-text ${previewValue === undefined ? 'tpl-inspector__preview-text--missing' : ''}`}>
+                      {previewValue !== undefined ? previewValue : '⚠ 字段缺失'}
+                    </span>
+                  </div>
+                )}
+                <div className="tpl-inspector__field-row">
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">字号 (pt)</span>
+                    <input
+                      type="number"
+                      className="tpl-inspector__input"
+                      value={el.style.fontSizePt}
+                      min={1}
+                      onChange={(e) => handleUpdateElement({ style: { ...el.style, fontSizePt: Number(e.target.value) } } as Partial<TemplateElement>)}
+                    />
+                  </label>
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">粗细</span>
+                    <select
+                      className="tpl-inspector__input"
+                      value={el.style.fontWeight || 'normal'}
+                      onChange={(e) => handleUpdateElement({ style: { ...el.style, fontWeight: e.target.value as 'normal' | 'bold' } } as Partial<TemplateElement>)}
+                    >
+                      <option value="normal">常规</option>
+                      <option value="bold">粗体</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="tpl-inspector__field-row">
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">对齐</span>
+                    <select
+                      className="tpl-inspector__input"
+                      value={el.style.align || 'left'}
+                      onChange={(e) => handleUpdateElement({ style: { ...el.style, align: e.target.value as 'left' | 'center' | 'right' } } as Partial<TemplateElement>)}
+                    >
+                      <option value="left">左</option>
+                      <option value="center">居中</option>
+                      <option value="right">右</option>
+                    </select>
+                  </label>
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">颜色</span>
+                    <input
+                      type="color"
+                      className="tpl-inspector__input tpl-inspector__input--color"
+                      value={el.style.color || '#000000'}
+                      onChange={(e) => handleUpdateElement({ style: { ...el.style, color: e.target.value } } as Partial<TemplateElement>)}
+                    />
+                  </label>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* ── fixedImage: assetId + fitMode ── */}
+          {selectedElement.type === 'fixedImage' && (() => {
+            const el = selectedElement as FixedImageElement;
+            return (
+              <>
+                <label className="tpl-inspector__field">
+                  <span className="tpl-inspector__label">资产 ID</span>
+                  <input
+                    type="text"
+                    className="tpl-inspector__input"
+                    value={el.assetId}
+                    readOnly
+                    placeholder="未选择图片"
+                  />
+                </label>
+                <label className="tpl-inspector__field">
+                  <span className="tpl-inspector__label">填充模式</span>
+                  <select
+                    className="tpl-inspector__input"
+                    value={el.fitMode || 'contain'}
+                    onChange={(e) => handleUpdateElement({ fitMode: e.target.value as 'fill' | 'contain' | 'cover' } as Partial<TemplateElement>)}
+                  >
+                    <option value="contain">适应 (contain)</option>
+                    <option value="cover">裁切 (cover)</option>
+                    <option value="fill">拉伸 (fill)</option>
+                  </select>
+                </label>
+                {!el.assetId && (
+                  <span className="tpl-inspector__hint">在 0-E+ 中实现图片选择器</span>
+                )}
+              </>
+            );
+          })()}
+
+          {/* ── variableImage: 绑定 + fitMode + fallback ── */}
+          {selectedElement.type === 'variableImage' && (() => {
+            const el = selectedElement as VariableImageElement;
+            const previewValue = previewRecord && el.binding.fieldKey
+              ? previewRecord.fields[el.binding.fieldKey]
+              : undefined;
+            return (
+              <>
+                <div className="tpl-inspector__binding">
+                  <span className="tpl-inspector__label">字段绑定</span>
+                  <select
+                    className="tpl-inspector__input"
+                    value={el.binding.fieldKey || ''}
+                    onChange={(e) => handleUpdateElement({ binding: { ...el.binding, fieldKey: e.target.value || undefined } } as Partial<TemplateElement>)}
+                  >
+                    <option value="">-- 选择字段 --</option>
+                    {fieldKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                </div>
+                {previewRecord && (
+                  <div className="tpl-inspector__preview-value">
+                    <span className="tpl-inspector__label">预览值</span>
+                    <span className={`tpl-inspector__preview-text ${previewValue === undefined ? 'tpl-inspector__preview-text--missing' : ''}`}>
+                      {previewValue !== undefined ? previewValue : '⚠ 字段缺失'}
+                    </span>
+                  </div>
+                )}
+                <label className="tpl-inspector__field">
+                  <span className="tpl-inspector__label">填充模式</span>
+                  <select
+                    className="tpl-inspector__input"
+                    value={el.fitMode || 'contain'}
+                    onChange={(e) => handleUpdateElement({ fitMode: e.target.value as 'fill' | 'contain' | 'cover' } as Partial<TemplateElement>)}
+                  >
+                    <option value="contain">适应 (contain)</option>
+                    <option value="cover">裁切 (cover)</option>
+                    <option value="fill">拉伸 (fill)</option>
+                  </select>
+                </label>
+                {!el.fallbackAssetId && (
+                  <span className="tpl-inspector__hint">未设置回退图片</span>
+                )}
+              </>
+            );
+          })()}
+
+          {/* ── barcode: format + showHumanReadable + 绑定 ── */}
+          {selectedElement.type === 'barcode' && (() => {
+            const el = selectedElement as BarcodeElement;
+            const previewValue = previewRecord && el.binding.fieldKey
+              ? previewRecord.fields[el.binding.fieldKey]
+              : undefined;
+            return (
+              <>
+                <div className="tpl-inspector__binding">
+                  <span className="tpl-inspector__label">字段绑定</span>
+                  <select
+                    className="tpl-inspector__input"
+                    value={el.binding.fieldKey || ''}
+                    onChange={(e) => handleUpdateElement({ binding: { ...el.binding, fieldKey: e.target.value || undefined } } as Partial<TemplateElement>)}
+                  >
+                    <option value="">-- 选择字段 --</option>
+                    {fieldKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                </div>
+                {previewRecord && el.binding.fieldKey && (
+                  <div className="tpl-inspector__preview-value">
+                    <span className="tpl-inspector__label">预览值</span>
+                    <span className={`tpl-inspector__preview-text ${previewValue === undefined ? 'tpl-inspector__preview-text--missing' : ''}`}>
+                      {previewValue !== undefined ? previewValue : '⚠ 字段缺失'}
+                    </span>
+                  </div>
+                )}
+                <div className="tpl-inspector__field-row">
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">条码格式</span>
+                    <select
+                      className="tpl-inspector__input"
+                      value={el.barcodeStyle.format}
+                      onChange={(e) => handleUpdateElement({ barcodeStyle: { ...el.barcodeStyle, format: e.target.value as BarcodeFormat } } as Partial<TemplateElement>)}
+                    >
+                      <option value="code128">Code 128</option>
+                      <option value="code39">Code 39</option>
+                      <option value="ean13">EAN-13</option>
+                      <option value="ean8">EAN-8</option>
+                      <option value="upc_a">UPC-A</option>
+                      <option value="itf14">ITF-14</option>
+                    </select>
+                  </label>
+                  <label className="tpl-inspector__field tpl-inspector__field--half">
+                    <span className="tpl-inspector__label">显示文本</span>
+                    <input
+                      type="checkbox"
+                      checked={el.barcodeStyle.showHumanReadable ?? true}
+                      onChange={(e) => handleUpdateElement({ barcodeStyle: { ...el.barcodeStyle, showHumanReadable: e.target.checked } } as Partial<TemplateElement>)}
+                      style={{ width: 'auto', accentColor: 'var(--accent)' }}
+                    />
+                  </label>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* ── qrcode: 绑定 ── */}
+          {selectedElement.type === 'qrcode' && (() => {
+            const el = selectedElement;
+            const previewValue = previewRecord && el.binding.fieldKey
+              ? previewRecord.fields[el.binding.fieldKey]
+              : undefined;
+            return (
+              <>
+                <div className="tpl-inspector__binding">
+                  <span className="tpl-inspector__label">字段绑定</span>
+                  <select
+                    className="tpl-inspector__input"
+                    value={el.binding.fieldKey || ''}
+                    onChange={(e) => handleUpdateElement({ binding: { ...el.binding, fieldKey: e.target.value || undefined } } as Partial<TemplateElement>)}
+                  >
+                    <option value="">-- 选择字段 --</option>
+                    {fieldKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                </div>
+                {previewRecord && el.binding.fieldKey && (
+                  <div className="tpl-inspector__preview-value">
+                    <span className="tpl-inspector__label">预览值</span>
+                    <span className={`tpl-inspector__preview-text ${previewValue === undefined ? 'tpl-inspector__preview-text--missing' : ''}`}>
+                      {previewValue !== undefined ? previewValue : '⚠ 字段缺失'}
+                    </span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* zIndex */}
           <label className="tpl-inspector__field">

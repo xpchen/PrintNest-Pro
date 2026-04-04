@@ -11,6 +11,7 @@ import { EditorChromeProvider } from './components/shell/EditorChromeContext';
 import { AppTopBar } from './components/shell/AppTopBar';
 import { EditorModePlaceholder } from './components/shell/EditorModePlaceholder';
 import { OutputCenter } from './components/output/OutputCenter';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { TemplateWorkspace } from './components/template/TemplateWorkspace';
 import { LeftDock } from './components/shell/LeftDock';
 import { RightDock } from './components/shell/RightDock';
@@ -18,6 +19,7 @@ import { useAppStore } from './store/useAppStore';
 import type { SerializedEditorState } from '../shared/persistence/editorState';
 import { dispatchAppCommand } from './commands/commandRegistry';
 import { loadUiShellFromStorage, persistUiShellToStorage } from './store/slices/uiShellSlice';
+import { initTemplateHistorySubscription, useTemplateHistory } from './store/useTemplateHistory';
 
 export const App: React.FC = () => {
   const uiPhase = useAppStore((s) => s.uiPhase);
@@ -63,6 +65,44 @@ export const App: React.FC = () => {
     return () => {
       off?.();
     };
+  }, []);
+
+  // 初始化模板域独立历史
+  useEffect(() => {
+    const unsub = initTemplateHistorySubscription();
+    return () => unsub();
+  }, []);
+
+  // Ctrl+Z / Ctrl+Shift+Z 按 editorWorkMode 路由
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // 输入框中不拦截
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      const isMod = e.metaKey || e.ctrlKey;
+      if (!isMod) return;
+
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        const mode = useAppStore.getState().editorWorkMode;
+        if (mode === 'template') {
+          useTemplateHistory.getState().undo();
+        } else {
+          useAppStore.temporal.getState().undo();
+        }
+      } else if ((e.key === 'z' && e.shiftKey) || e.key === 'Z') {
+        e.preventDefault();
+        const mode = useAppStore.getState().editorWorkMode;
+        if (mode === 'template') {
+          useTemplateHistory.getState().redo();
+        } else {
+          useAppStore.temporal.getState().redo();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   useEffect(() => {
@@ -183,6 +223,7 @@ export const App: React.FC = () => {
           <RightDock />
         </div>
         {statusBarVisible && <StatusBar />}
+        <ConfirmDialog />
       </div>
     </EditorChromeProvider>
   );

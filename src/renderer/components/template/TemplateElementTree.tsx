@@ -62,12 +62,21 @@ export const TemplateElementTree: React.FC = () => {
     [currentTemplateId, updateElement],
   );
 
+  const showConfirm = useAppStore((s) => s.showConfirm);
+
   const handleDelete = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (!currentTemplateId) return;
+      const confirmed = await showConfirm({
+        title: '删除元素',
+        message: '确定要删除该元素吗？此操作不可撤销。',
+        confirmLabel: '删除',
+        danger: true,
+      });
+      if (!confirmed) return;
       removeElement(currentTemplateId, id);
     },
-    [currentTemplateId, removeElement],
+    [currentTemplateId, removeElement, showConfirm],
   );
 
   // ── 拖拽排序 ──
