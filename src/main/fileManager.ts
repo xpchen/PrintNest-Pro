@@ -291,6 +291,7 @@ export interface AssetRecord {
  */
 export function listProjectAssets(projectId: string): AssetRecord[] {
   const db = getOrOpenProjectDb(projectId);
+  if (!db) return [];
   const rows = db
     .prepare('SELECT id, managed_relative_path, pixel_width, pixel_height FROM assets')
     .all() as { id: string; managed_relative_path: string; pixel_width: number | null; pixel_height: number | null }[];
@@ -308,6 +309,7 @@ export function listProjectAssets(projectId: string): AssetRecord[] {
  */
 export function readAssetThumbnailBase64(projectId: string, assetId: string): string | null {
   const db = getOrOpenProjectDb(projectId);
+  if (!db) return null;
   const row = db
     .prepare('SELECT managed_relative_path FROM assets WHERE id = ?')
     .get(assetId) as { managed_relative_path: string } | undefined;

@@ -69,15 +69,12 @@ export interface ResolvedBarcodeDrawable extends DrawableBase {
   value: string;
   format: string;
   showHumanReadable: boolean;
-  /** 当前阶段 barcode 只做占位渲染 */
-  placeholder: true;
   source: 'bound' | 'missing';
 }
 
 export interface ResolvedQrCodeDrawable extends DrawableBase {
   type: 'qrcode';
   value: string;
-  placeholder: true;
   source: 'bound' | 'missing';
 }
 

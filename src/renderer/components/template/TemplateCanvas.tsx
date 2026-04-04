@@ -1,13 +1,14 @@
 /**
  * 模板设计画布 — 基于统一渲染协议 resolveTemplateDrawables 显示真实内容
  */
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { TemplateElement } from '../../../shared/types';
 import { resolveTemplateDrawables } from '../../../shared/template/resolveDrawables';
 import type { ResolvedDrawable } from '../../../shared/types/template-render';
 import { useAssetMap } from '../../hooks/useAssetMap';
 import { ContextMenu, type ContextMenuItem } from '../ContextMenu';
+import { renderBarcodeSvg, renderQrCodeSvg } from '../../../shared/template/barcodeRenderer';
 
 const CANVAS_PADDING = 20;
 const PX_PER_MM = 3;
@@ -55,6 +56,79 @@ function textXOffset(align: string | undefined, w: number): number {
   if (align === 'center') return w / 2;
   if (align === 'right') return w - 3;
   return 3;
+}
+
+/** 异步条码 SVG 渲染组件 */
+function AsyncBarcodeSvg({ d, x, y, w, h }: { d: Extract<ResolvedDrawable, { type: 'barcode' }>; x: number; y: number; w: number; h: number }) {
+  const [svgContent, setSvgContent] = useState<string | null>(null);
+  const keyRef = useRef('');
+  const key = `${d.value}|${d.format}|${w}|${h}`;
+
+  useEffect(() => {
+    if (key === keyRef.current) return;
+    keyRef.current = key;
+    if (!d.value || d.source === 'missing') { setSvgContent(null); return; }
+    void renderBarcodeSvg(d.value, d.format, {
+      width: w, height: h,
+      showHumanReadable: d.showHumanReadable,
+    }).then((svg) => { if (keyRef.current === key) setSvgContent(svg); });
+  }, [key, d.value, d.format, d.showHumanReadable, d.source, w, h]);
+
+  if (!svgContent || d.source === 'missing') {
+    return (
+      <g>
+        <rect x={x} y={y} width={w} height={h} fill="#45B7D122" stroke="#45B7D1" strokeWidth={1} />
+        <text x={x + w / 2} y={y + h / 2} textAnchor="middle" dominantBaseline="central" fontSize={8} fill={d.source === 'missing' ? '#e53e3e' : '#45B7D1'} pointerEvents="none">
+          {d.source === 'missing' ? `⚠ {${d.value}}` : '...'}
+        </text>
+      </g>
+    );
+  }
+
+  // 使用 foreignObject 嵌入 SVG
+  return (
+    <foreignObject x={x} y={y} width={w} height={h}>
+      <div
+        style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}
+        dangerouslySetInnerHTML={{ __html: svgContent }}
+      />
+    </foreignObject>
+  );
+}
+
+/** 异步二维码 SVG 渲染组件 */
+function AsyncQrCodeSvg({ d, x, y, w, h }: { d: Extract<ResolvedDrawable, { type: 'qrcode' }>; x: number; y: number; w: number; h: number }) {
+  const [svgContent, setSvgContent] = useState<string | null>(null);
+  const keyRef = useRef('');
+  const key = `${d.value}|${w}|${h}`;
+
+  useEffect(() => {
+    if (key === keyRef.current) return;
+    keyRef.current = key;
+    if (!d.value || d.source === 'missing') { setSvgContent(null); return; }
+    void renderQrCodeSvg(d.value, { width: w, height: h })
+      .then((svg) => { if (keyRef.current === key) setSvgContent(svg); });
+  }, [key, d.value, d.source, w, h]);
+
+  if (!svgContent || d.source === 'missing') {
+    return (
+      <g>
+        <rect x={x} y={y} width={w} height={h} fill="#96CEB422" stroke="#96CEB4" strokeWidth={1} />
+        <text x={x + w / 2} y={y + h / 2} textAnchor="middle" dominantBaseline="central" fontSize={8} fill={d.source === 'missing' ? '#e53e3e' : '#96CEB4'} pointerEvents="none">
+          {d.source === 'missing' ? `⚠ QR` : '...'}
+        </text>
+      </g>
+    );
+  }
+
+  return (
+    <foreignObject x={x} y={y} width={w} height={h}>
+      <div
+        style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}
+        dangerouslySetInnerHTML={{ __html: svgContent }}
+      />
+    </foreignObject>
+  );
 }
 
 function DrawableRenderer({ d, px }: { d: ResolvedDrawable; px: number }) {
@@ -114,52 +188,11 @@ function DrawableRenderer({ d, px }: { d: ResolvedDrawable; px: number }) {
     }
 
     case 'barcode': {
-      return (
-        <g>
-          <rect x={x} y={y} width={w} height={h} fill="#45B7D122" stroke="#45B7D1" strokeWidth={1} />
-          {/* 条码竖线占位 */}
-          {Array.from({ length: Math.min(12, Math.floor(w / 4)) }, (_, i) => (
-            <rect
-              key={i}
-              x={x + 4 + i * (w - 8) / 12}
-              y={y + 3}
-              width={Math.max(1, (w - 8) / 24)}
-              height={d.showHumanReadable ? h - 14 : h - 6}
-              fill="#45B7D1"
-            />
-          ))}
-          {d.showHumanReadable && (
-            <text x={x + w / 2} y={y + h - 3} textAnchor="middle" fontSize={8} fill={d.source === 'missing' ? '#e53e3e' : '#45B7D1'} pointerEvents="none">
-              {d.value.length > 16 ? d.value.slice(0, 14) + '…' : d.value}
-            </text>
-          )}
-        </g>
-      );
+      return <AsyncBarcodeSvg d={d} x={x} y={y} w={w} h={h} />;
     }
 
     case 'qrcode': {
-      const cellSize = Math.min(w, h) / 8;
-      return (
-        <g>
-          <rect x={x} y={y} width={w} height={h} fill="#96CEB422" stroke="#96CEB4" strokeWidth={1} />
-          {/* QR 占位图案 */}
-          {[0, 1, 2].map((r) =>
-            [0, 1, 2].map((c) => (
-              <rect
-                key={`${r}-${c}`}
-                x={x + 3 + c * cellSize}
-                y={y + 3 + r * cellSize}
-                width={cellSize * 0.8}
-                height={cellSize * 0.8}
-                fill="#96CEB4"
-              />
-            )),
-          )}
-          <text x={x + w / 2} y={y + h - 4} textAnchor="middle" fontSize={7} fill={d.source === 'missing' ? '#e53e3e' : '#96CEB4'} pointerEvents="none">
-            QR
-          </text>
-        </g>
-      );
+      return <AsyncQrCodeSvg d={d} x={x} y={y} w={w} h={h} />;
     }
 
     case 'rect': {

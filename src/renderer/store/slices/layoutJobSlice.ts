@@ -358,13 +358,11 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
       templates: s.templates,
     });
 
-    // 先设 items（metadata 可读回退立即生效），再异步预渲染
+    // 先设 items（metadata 可读回退），立即跑排版 → 用户秒看到结果
     set({ items: printItems });
+    await get().runAutoLayout();
 
-    // 预渲染模板实例位图（动态导入避免测试环境加载 OffscreenCanvas）
-    const { batchPreRenderInstances, bumpRenderGeneration } = await import('../../utils/templatePreviewRenderer');
-    const { fetchAssetMap } = await import('../../hooks/useAssetMap');
-    bumpRenderGeneration();
+    // 排版完成后，后台异步预渲染位图，逐批更新画布
     const tplMap = new Map(s.templates.map((t) => [t.id, t]));
     const recordMap = new Map(s.dataRecords.map((r) => [r.id, r]));
     const preRenderInputs: PreRenderInput[] = [];
@@ -379,27 +377,42 @@ export const createLayoutJobSlice: StateCreator<AppState, [], [], LayoutJobSlice
     }
 
     if (preRenderInputs.length > 0) {
-      try {
-        const assetMap = await fetchAssetMap(s.currentProjectId);
-        const blobUrls = await batchPreRenderInstances(preRenderInputs, assetMap);
+      const { showToast } = await import('../../utils/toast');
+      showToast(`排版完成，正在生成 ${preRenderInputs.length} 个模板预览图…`, 'info');
 
-        // 将 blobUrl 写入对应 PrintItem 的 imageSrc
-        if (blobUrls.size > 0) {
-          const updatedItems = get().items.map((item) => {
-            const instanceId = item.metadata?.sourceInstanceId;
-            if (instanceId && blobUrls.has(instanceId)) {
-              return { ...item, imageSrc: blobUrls.get(instanceId)! };
+      // 后台预渲染（不阻塞排版结果展示）
+      void (async () => {
+        try {
+          const { batchPreRenderInstances, bumpRenderGeneration } = await import('../../utils/templatePreviewRenderer');
+          const { fetchAssetMap } = await import('../../hooks/useAssetMap');
+          bumpRenderGeneration();
+          const assetMap = await fetchAssetMap(s.currentProjectId);
+
+          // 分批渲染并逐批更新 items，每批 50 个
+          const BATCH = 50;
+          for (let i = 0; i < preRenderInputs.length; i += BATCH) {
+            const chunk = preRenderInputs.slice(i, i + BATCH);
+            const blobUrls = await batchPreRenderInstances(chunk, assetMap);
+
+            if (blobUrls.size > 0) {
+              const updatedItems = get().items.map((item) => {
+                const instanceId = item.metadata?.sourceInstanceId;
+                if (instanceId && blobUrls.has(instanceId)) {
+                  return { ...item, imageSrc: blobUrls.get(instanceId)! };
+                }
+                return item;
+              });
+              set({ items: updatedItems });
             }
-            return item;
-          });
-          set({ items: updatedItems });
+            log.engine.info('pre-render progress', { done: Math.min(i + BATCH, preRenderInputs.length), total: preRenderInputs.length });
+          }
+          showToast(`${preRenderInputs.length} 个模板预览图生成完毕`, 'success');
+        } catch (err) {
+          log.engine.warn('pre-render failed, metadata fallback active', { error: String(err) });
+          const { showToast: toast } = await import('../../utils/toast');
+          toast('模板预览图生成失败，使用文字信息展示', 'warning');
         }
-      } catch (err) {
-        log.engine.warn('pre-render failed, metadata fallback active', { error: String(err) });
-      }
+      })();
     }
-
-    // 使用现有 runAutoLayout 流程
-    return get().runAutoLayout();
   },
 });

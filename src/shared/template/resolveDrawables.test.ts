@@ -92,7 +92,7 @@ describe('resolveTemplateDrawables', () => {
     }
   });
 
-  it('resolves barcode as placeholder', () => {
+  it('resolves barcode with value and format', () => {
     const tpl = makeTpl([
       { id: 'e1', type: 'barcode', xMm: 0, yMm: 0, widthMm: 40, heightMm: 15, zIndex: 0, binding: { mode: 'field', fieldKey: 'code' }, barcodeStyle: { format: 'code128' } },
     ]);
@@ -101,7 +101,6 @@ describe('resolveTemplateDrawables', () => {
     expect(drawables[0].type).toBe('barcode');
     if (drawables[0].type === 'barcode') {
       expect(drawables[0].value).toBe('123456');
-      expect(drawables[0].placeholder).toBe(true);
       expect(drawables[0].format).toBe('code128');
     }
   });

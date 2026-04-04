@@ -142,7 +142,6 @@ function resolveOne(
         value,
         format: el.barcodeStyle.format,
         showHumanReadable: el.barcodeStyle.showHumanReadable ?? true,
-        placeholder: true,
         source,
       } satisfies ResolvedBarcodeDrawable;
     }
@@ -167,7 +166,6 @@ function resolveOne(
         ...base,
         type: 'qrcode',
         value,
-        placeholder: true,
         source,
       } satisfies ResolvedQrCodeDrawable;
     }

@@ -16,8 +16,6 @@ export const TemplateWorkspace: React.FC = () => {
   const currentTemplateId = useAppStore((s) => s.currentTemplateId);
   const runAutoLayoutFromInstances = useAppStore((s) => s.runAutoLayoutFromInstances);
   const setEditorWorkMode = useAppStore((s) => s.setEditorWorkMode);
-  const clearAllInstances = useAppStore((s) => s.clearAllInstances);
-  const clearCurrentTemplateInstances = useAppStore((s) => s.clearCurrentTemplateInstances);
   const showConfirm = useAppStore((s) => s.showConfirm);
 
   const [showInstances, setShowInstances] = useState(false);
@@ -56,27 +54,33 @@ export const TemplateWorkspace: React.FC = () => {
   const canInstantiate = currentTemplateId != null && dataRecords.length > 0;
 
   const handleClearCurrent = useCallback(async () => {
-    const confirmed = await showConfirm({
+    const tid = useAppStore.getState().currentTemplateId;
+    if (!tid) return;
+    const count = useAppStore.getState().templateInstances.filter((i) => i.templateId === tid).length;
+    const ok = await showConfirm({
       title: '清空当前模板实例',
-      message: `确定要清空当前模板的 ${currentInstances.length} 个实例吗？`,
+      message: `确定要清空当前模板的 ${count} 个实例吗？此操作不可撤销。`,
       confirmLabel: '清空',
       danger: true,
     });
-    if (confirmed) clearCurrentTemplateInstances();
-  }, [showConfirm, clearCurrentTemplateInstances, currentInstances.length]);
+    if (!ok) return;
+    const remaining = useAppStore.getState().templateInstances.filter((i) => i.templateId !== tid);
+    useAppStore.setState({ templateInstances: remaining });
+    setShowInstances(false);
+  }, [showConfirm]);
 
   const handleClearAll = useCallback(async () => {
-    const confirmed = await showConfirm({
+    const count = useAppStore.getState().templateInstances.length;
+    const ok = await showConfirm({
       title: '清空全部实例',
-      message: `确定要清空所有模板的 ${templateInstances.length} 个实例吗？`,
-      confirmLabel: '全部清空',
+      message: `确定要清空全部 ${count} 个实例吗？此操作不可撤销。`,
+      confirmLabel: '清空全部',
       danger: true,
     });
-    if (confirmed) {
-      clearAllInstances();
-      setShowInstances(false);
-    }
-  }, [showConfirm, clearAllInstances, templateInstances.length]);
+    if (!ok) return;
+    useAppStore.setState({ templateInstances: [] });
+    setShowInstances(false);
+  }, [showConfirm]);
 
   return (
     <div className="tpl-workspace">

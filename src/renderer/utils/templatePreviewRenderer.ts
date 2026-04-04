@@ -7,6 +7,7 @@
 import { resolveTemplateDrawables } from '../../shared/template/resolveDrawables';
 import type { ResolveDrawablesInput, ResolvedDrawable, AssetEntry } from '../../shared/types/template-render';
 import type { TemplateDefinition, DataRecord, TemplateInstance } from '../../shared/types/template';
+import { drawBarcodeToCtx, drawQrCodeToCtx } from '../../shared/template/barcodeRenderer';
 
 /* ================================================================ */
 /*  缓存                                                             */
@@ -180,71 +181,12 @@ async function drawDrawables(
       }
 
       case 'barcode': {
-        // 占位渲染：带边框的条码区域
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(dx, dy, dw, dh);
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(dx, dy, dw, dh);
-
-        // 条码条纹示意
-        const barW = Math.max(1, 2 * scale);
-        const barCount = Math.floor(dw / (barW * 2));
-        ctx.fillStyle = '#333';
-        for (let i = 0; i < barCount; i++) {
-          const bx = dx + 4 * scale + i * barW * 2;
-          if (bx + barW > dx + dw - 4 * scale) break;
-          const bh = dh * 0.6;
-          ctx.fillRect(bx, dy + 2 * scale, barW, bh);
-        }
-
-        // 底部文字
-        if (d.showHumanReadable && d.value) {
-          const fs = Math.min(fontSize(dh * 0.2, scale), 14 * scale);
-          ctx.font = `${fs}px monospace`;
-          ctx.fillStyle = '#333';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText(d.value.slice(0, 20), dx + dw / 2, dy + dh - 2 * scale, dw - 4 * scale);
-        }
+        await drawBarcodeToCtx(ctx, d.value, d.format, dx, dy, dw, dh, scale, d.showHumanReadable);
         break;
       }
 
       case 'qrcode': {
-        // 占位渲染：QR 码方块示意
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(dx, dy, dw, dh);
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(dx, dy, dw, dh);
-
-        const side = Math.min(dw, dh);
-        const qx = dx + (dw - side) / 2;
-        const qy = dy + (dh - side) / 2;
-        const cellSize = side / 7;
-
-        // 简化 QR 定位角
-        ctx.fillStyle = '#333';
-        // 左上
-        ctx.fillRect(qx, qy, cellSize * 3, cellSize * 3);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(qx + cellSize * 0.5, qy + cellSize * 0.5, cellSize * 2, cellSize * 2);
-        ctx.fillStyle = '#333';
-        ctx.fillRect(qx + cellSize, qy + cellSize, cellSize, cellSize);
-        // 右上
-        ctx.fillStyle = '#333';
-        ctx.fillRect(qx + side - cellSize * 3, qy, cellSize * 3, cellSize * 3);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(qx + side - cellSize * 2.5, qy + cellSize * 0.5, cellSize * 2, cellSize * 2);
-        ctx.fillStyle = '#333';
-        ctx.fillRect(qx + side - cellSize * 2, qy + cellSize, cellSize, cellSize);
-        // 左下
-        ctx.fillStyle = '#333';
-        ctx.fillRect(qx, qy + side - cellSize * 3, cellSize * 3, cellSize * 3);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(qx + cellSize * 0.5, qy + side - cellSize * 2.5, cellSize * 2, cellSize * 2);
-        ctx.fillStyle = '#333';
-        ctx.fillRect(qx + cellSize, qy + side - cellSize * 2, cellSize, cellSize);
+        await drawQrCodeToCtx(ctx, d.value, dx, dy, dw, dh);
         break;
       }
 
@@ -271,9 +213,6 @@ async function drawDrawables(
   return canvas.convertToBlob({ type: 'image/png' });
 }
 
-function fontSize(target: number, scale: number): number {
-  return Math.max(target, 8 * scale);
-}
 
 /* ================================================================ */
 /*  批量渲染                                                         */

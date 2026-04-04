@@ -19,9 +19,13 @@ export function useProjectAutoSave(): void {
       if (!s.config) return;
       useAppStore.getState().setSaveStatus('saving');
       try {
+        // 剥离 blob: URL（运行时临时资源，重启后失效）
+        const cleanItems = s.items.map((item) =>
+          item.imageSrc?.startsWith('blob:') ? { ...item, imageSrc: undefined } : item,
+        );
         await api.autoSaveProject!(s.currentProjectId, {
           projectName: s.projectName,
-          items: s.items,
+          items: cleanItems,
           config: s.config,
           result: s.result,
           layoutSourceSignature: s.layoutSourceSignature,
