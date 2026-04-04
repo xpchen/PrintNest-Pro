@@ -261,8 +261,21 @@ export const TemplateCanvas: React.FC = () => {
     (type: TemplateElement['type']) => {
       if (!currentTemplateId || !tpl) return;
       const offset = (tpl.elements.length % 10) * 8;
+      // 生成人类可读的默认名称：类型名 + 序号
+      const TYPE_NAME: Record<TemplateElement['type'], string> = {
+        fixedText: '固定文本',
+        variableText: '变量文本',
+        fixedImage: '固定图片',
+        variableImage: '变量图片',
+        barcode: '条码',
+        qrcode: '二维码',
+        mark: '标记',
+      };
+      const existingCount = tpl.elements.filter((e) => e.type === type).length;
+      const defaultName = `${TYPE_NAME[type]} ${existingCount + 1}`;
       const base = {
         id: newElementId(),
+        name: defaultName,
         xMm: 5 + offset,
         yMm: 5 + offset,
         widthMm: 30,

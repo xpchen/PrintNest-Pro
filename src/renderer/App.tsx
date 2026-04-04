@@ -64,7 +64,7 @@ export const App: React.FC = () => {
                     <CanvasArea />
                   </div>
                   {overviewVisible ? (
-                    <aside className="center-stage__overview-strip" aria-label="鹰眼导航">
+                    <aside className="center-stage__overview-strip" aria-label="缩略导航">
                       <OverviewCard />
                     </aside>
                   ) : null}

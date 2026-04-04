@@ -75,7 +75,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       exportPdfHistoricalNonce: 0,
       runPanelVisible: false,
       sidebarTab: 'resources',
-      editorWorkMode: 'layout',
+      editorWorkMode: 'resources',
       canvasPointerMm: null,
       leftDockCollapsed: false,
       rightDockCollapsed: false,
@@ -117,7 +117,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       exportPdfHistoricalNonce: 0,
       runPanelVisible: false,
       sidebarTab: 'resources',
-      editorWorkMode: 'layout',
+      // 智能默认：有排版结果或素材时进入排版视图，否则进入资源视图
+      editorWorkMode: (payload.result && payload.items.length > 0) ? 'layout' : 'resources',
       canvasPointerMm: null,
       leftDockCollapsed: false,
       rightDockCollapsed: false,

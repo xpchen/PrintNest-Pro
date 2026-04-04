@@ -72,7 +72,7 @@ export const CanvasHeader: React.FC = () => {
             className={`btn btn-tiny${!overviewVisible ? ' is-off' : ''}`}
             onClick={() => setOverviewVisible(!overviewVisible)}
           >
-            鹰眼
+            缩略导航
           </button>
         </div>
 

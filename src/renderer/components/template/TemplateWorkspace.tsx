@@ -125,7 +125,7 @@ export const TemplateWorkspace: React.FC = () => {
               disabled={!canInstantiate || instantiating}
               onClick={handleInstantiate}
             >
-              {instantiating ? '实例化中…' : '实例化当前模板'}
+              {instantiating ? '生成中…' : '生成标签'}
             </button>
             <button
               type="button"
@@ -133,7 +133,7 @@ export const TemplateWorkspace: React.FC = () => {
               disabled={readyCount === 0}
               onClick={handleSendToLayout}
             >
-              送入排版 ({readyCount})
+              开始排版 ({readyCount})
             </button>
           </div>
         </div>

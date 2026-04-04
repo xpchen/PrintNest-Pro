@@ -29,7 +29,7 @@ export const createCanvasViewSlice: StateCreator<AppState, [], [], CanvasViewSli
   excelImportNonce: 0,
   runPanelVisible: false,
   sidebarTab: 'resources',
-  editorWorkMode: 'layout',
+  editorWorkMode: 'resources',
   canvasPointerMm: null,
 
   setActiveCanvas: (index) => set({ activeCanvasIndex: index }),

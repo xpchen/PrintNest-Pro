@@ -54,7 +54,8 @@ export const ImportMappingModal: React.FC<ImportMappingModalProps> = ({
   const [selectedTableIdx, setSelectedTableIdx] = useState(0);
   const [mappings, setMappings] = useState<FieldMapping[]>([]);
   const [sizeUnit, setSizeUnit] = useState<'cm' | 'mm'>('cm');
-  const [outputMode, setOutputMode] = useState<OutputMode>('layout');
+  const templates = useAppStore((s) => s.templates);
+  const [outputMode, setOutputMode] = useState<OutputMode>(templates.length > 0 ? 'dataRecord' : 'layout');
 
   const table = tables[selectedTableIdx] ?? null;
 
@@ -259,7 +260,7 @@ export const ImportMappingModal: React.FC<ImportMappingModalProps> = ({
                   checked={outputMode === 'layout'}
                   onChange={() => setOutputMode('layout')}
                 />
-                布局素材（旧行为）
+                直接排版 — 每行作为独立素材，立即可排版
               </label>
               <label className="wizard-radio">
                 <input
@@ -268,7 +269,7 @@ export const ImportMappingModal: React.FC<ImportMappingModalProps> = ({
                   checked={outputMode === 'dataRecord'}
                   onChange={() => setOutputMode('dataRecord')}
                 />
-                数据记录（模板流程）
+                模板标签 — 每行作为数据记录，配合模板生成标签{templates.length > 0 ? '（推荐）' : ''}
               </label>
             </div>
           </div>
